@@ -20,11 +20,22 @@ def diagnose():
         except Exception:
             result[name] = {"state": "UNAVAILABLE", "instructions": "Install FFmpeg including FFprobe"}
     result["codex"] = auth_status()
-    result["codex_sdk"] = {"state": "READY" if importlib.util.find_spec("openai_codex") else "UNAVAILABLE",
-                            "note": "Module detection only; actual model access requires a completed turn"}
-    result["alembic"] = {"state": "READY" if importlib.util.find_spec("alembic") else "UNAVAILABLE"}
+    result["codex_sdk"] = {
+        "state": "READY" if importlib.util.find_spec("openai_codex") else "UNAVAILABLE",
+        "note": "Module detection only; actual model access requires a completed turn",
+    }
+    try:
+        import alembic
+
+        result["alembic"] = {"state": "READY", "version": alembic.__version__}
+    except ImportError:
+        result["alembic"] = {
+            "state": "UNAVAILABLE",
+            "instructions": "Run setup to install or repair migration dependencies.",
+        }
     try:
         from sqlalchemy import text
+
         with Session() as db:
             mode = db.execute(text("PRAGMA journal_mode")).scalar()
             db.execute(text("SELECT 1"))
@@ -40,14 +51,24 @@ def diagnose():
             result[name] = {"state": "READY"}
         except Exception:
             result[name] = {"state": "UNAVAILABLE", "optional": True}
-    result["voice"] = {"state": "READY" if Path(settings.piper_voice_path).is_file() and
-                       Path(settings.piper_voice_path+".json").is_file() else "MISSING_CONFIG"}
-    for name, configured in (("google", settings.google_client_id and settings.google_client_secret),
-                              ("youtube", settings.google_client_id and settings.google_client_secret),
-                              ("tiktok", settings.tiktok_client_key and settings.tiktok_client_secret)):
-        result[name] = {"state": "AUTH_REQUIRED" if configured else "MISSING_CONFIG",
-                        "note": "Verify live permissions with Verify account after connecting"}
-    result["publishing"] = {"state": "PERMISSION_REQUIRED", "note": "Explicit approval and confirmation required"}
+    result["voice"] = {
+        "state": "READY"
+        if Path(settings.piper_voice_path).is_file() and Path(settings.piper_voice_path + ".json").is_file()
+        else "MISSING_CONFIG"
+    }
+    for name, configured in (
+        ("google", settings.google_client_id and settings.google_client_secret),
+        ("youtube", settings.google_client_id and settings.google_client_secret),
+        ("tiktok", settings.tiktok_client_key and settings.tiktok_client_secret),
+    ):
+        result[name] = {
+            "state": "AUTH_REQUIRED" if configured else "MISSING_CONFIG",
+            "note": "Verify live permissions with Verify account after connecting",
+        }
+    result["publishing"] = {
+        "state": "PERMISSION_REQUIRED",
+        "note": "Explicit approval and confirmation required",
+    }
     return result
 
 

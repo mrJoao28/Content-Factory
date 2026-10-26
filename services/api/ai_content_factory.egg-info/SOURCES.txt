@@ -14,6 +14,8 @@ services/api/factory/__init__.py
 services/api/factory/api_helpers.py
 services/api/factory/audio.py
 services/api/factory/codex.py
+services/api/factory/codex_auth.py
+services/api/factory/codex_auth_bridge.py
 services/api/factory/config.py
 services/api/factory/db.py
 services/api/factory/doctor.py
@@ -35,9 +37,11 @@ services/api/migrations/env.py
 services/api/migrations/versions/0001_initial.py
 tests/test_api.py
 tests/test_codex_audio.py
+tests/test_codex_login.py
 tests/test_integrations.py
 tests/test_migrations.py
 tests/test_pipeline.py
 tests/test_publishing.py
 tests/test_queue.py
 tests/test_render.py
+tests/test_windows_scripts.py

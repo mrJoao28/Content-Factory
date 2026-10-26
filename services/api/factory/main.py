@@ -5,8 +5,8 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy.exc import IntegrityError
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import settings
 from .db import engine, seed
@@ -27,12 +27,20 @@ async def lifespan(app):
     app.state.worker = worker
     yield
     worker.close()
+    from .codex_auth import login_manager
+
+    login_manager.cancel()
 
 
 app = FastAPI(title="AI Content Factory", version="0.1.0", lifespan=lifespan)
 origins = [f"http://127.0.0.1:{settings.web_port}", f"http://localhost:{settings.web_port}"]
-app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST", "PATCH", "DELETE"],
-                   allow_headers=["Content-Type", "X-Factory-Client"], allow_credentials=False)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["Content-Type", "X-Factory-Client"],
+    allow_credentials=False,
+)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
 
 
@@ -76,6 +84,7 @@ async def network_error(request, exc):
 
 
 from . import routes_library, routes_projects, routes_system  # noqa: E402
+
 app.include_router(routes_projects.router)
 app.include_router(routes_library.router)
 app.include_router(routes_system.router)

@@ -1,8 +1,7 @@
 from alembic import context
-from sqlalchemy import create_engine
-
 from factory.config import settings
 from factory.models import Base
+from sqlalchemy import create_engine
 
 target_metadata = Base.metadata
 if context.is_offline_mode():

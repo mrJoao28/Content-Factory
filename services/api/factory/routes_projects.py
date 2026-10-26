@@ -9,11 +9,29 @@ from sqlalchemy import select
 from .api_helpers import no_running_job, project_or_404, serialize
 from .config import settings
 from .db import Session
-from .models import (Channel, PlatformPublication, ProductionJob, PublishingSchedule,
-                     QualityReview, RenderArtifact, Series, VideoProject, utcnow)
+from .models import (
+    Channel,
+    PlatformPublication,
+    ProductionJob,
+    PublishingSchedule,
+    QualityReview,
+    RenderArtifact,
+    Series,
+    VideoProject,
+    utcnow,
+)
 from .publishing import approved, current_artifact, manual_package, publish, refresh_publication
 from .queue import ACTIVE, WAITING, enqueue, event
-from .schemas import BatchCreate, DirectPost, ManualPublication, ProjectCreate, ProjectEdit, PublishRequest, Review, Schedule
+from .schemas import (
+    BatchCreate,
+    DirectPost,
+    ManualPublication,
+    ProjectCreate,
+    ProjectEdit,
+    PublishRequest,
+    Review,
+    Schedule,
+)
 from .security import digest, safe_path
 
 router = APIRouter()
@@ -34,7 +52,11 @@ def create_project(body: ProjectCreate):
         channel_id = body.channel_id
         if not channel_id:
             text = body.idea.lower()
-            channel_id = "wondernest" if any(x in text for x in ("child", "kid", "magical", "friendship", "color")) else "how-it-works"
+            channel_id = (
+                "wondernest"
+                if any(x in text for x in ("child", "kid", "magical", "friendship", "color"))
+                else "how-it-works"
+            )
         data = body.model_dump()
         data["channel_id"] = channel_id
         if body.channel_id is None:
@@ -45,17 +67,25 @@ def create_project(body: ProjectCreate):
             series = db.get(Series, body.series_id)
             if not series or series.channel_id != channel_id:
                 raise ValueError("Series not found in this channel")
-        hashed = hashlib.sha256((channel_id+" "+" ".join(body.idea.lower().split())).encode()).hexdigest()
+        hashed = hashlib.sha256((channel_id + " " + " ".join(body.idea.lower().split())).encode()).hexdigest()
         existing = db.scalar(select(VideoProject).where(VideoProject.idea_hash == hashed))
         if existing:
             raise HTTPException(409, {"message": "Duplicate idea", "project_id": existing.id})
         landscape = body.content_type == "episode"
-        project = VideoProject(channel_id=channel_id, series_id=body.series_id,
-                               title=body.idea[:80], idea=body.idea, idea_hash=hashed,
-                               platform=channel.platform, content_type=body.content_type,
-                               target_duration=body.target_duration, aspect_ratio="16:9" if landscape else "9:16",
-                               width=1280 if landscape else settings.render_default_width,
-                               height=720 if landscape else settings.render_default_height, fps=settings.render_default_fps)
+        project = VideoProject(
+            channel_id=channel_id,
+            series_id=body.series_id,
+            title=body.idea[:80],
+            idea=body.idea,
+            idea_hash=hashed,
+            platform=channel.platform,
+            content_type=body.content_type,
+            target_duration=body.target_duration,
+            aspect_ratio="16:9" if landscape else "9:16",
+            width=1280 if landscape else settings.render_default_width,
+            height=720 if landscape else settings.render_default_height,
+            fps=settings.render_default_fps,
+        )
         db.add(project)
         db.flush()
         enqueue(db, project)
@@ -69,10 +99,18 @@ def project_detail(project_id: str):
     with Session() as db:
         project = project_or_404(db, project_id)
         result = serialize(project)
-        for name, model in (("jobs", ProductionJob), ("artifacts", RenderArtifact),
-                            ("reviews", QualityReview), ("publications", PlatformPublication)):
-            result[name] = [serialize(x) for x in db.scalars(select(model).where(model.project_id == project_id)
-                                                             .order_by(model.created_at.desc()))]
+        for name, model in (
+            ("jobs", ProductionJob),
+            ("artifacts", RenderArtifact),
+            ("reviews", QualityReview),
+            ("publications", PlatformPublication),
+        ):
+            result[name] = [
+                serialize(x)
+                for x in db.scalars(
+                    select(model).where(model.project_id == project_id).order_by(model.created_at.desc())
+                )
+            ]
         return result
 
 
@@ -91,8 +129,11 @@ def edit_project(project_id: str, body: ProjectEdit):
             project.storyboard = body.storyboard.model_dump(mode="json")
         if body.metadata:
             project.metadata_json = body.metadata.model_dump()
-        for job in db.scalars(select(ProductionJob).where(ProductionJob.project_id == project_id,
-                                                         ProductionJob.state.in_(ACTIVE | WAITING))):
+        for job in db.scalars(
+            select(ProductionJob).where(
+                ProductionJob.project_id == project_id, ProductionJob.state.in_(ACTIVE | WAITING)
+            )
+        ):
             job.state = "CANCELLED"
         project.revision += 1
         project.approved_hash = None
@@ -104,8 +145,11 @@ def edit_project(project_id: str, body: ProjectEdit):
 def control_job(project_id: str, action: str):
     with Session.begin() as db:
         project = project_or_404(db, project_id)
-        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == project_id,
-                                                   ProductionJob.revision == project.revision))
+        job = db.scalar(
+            select(ProductionJob).where(
+                ProductionJob.project_id == project_id, ProductionJob.revision == project.revision
+            )
+        )
         if action == "resume":
             no_running_job(db, project_id)
             if not job:
@@ -139,8 +183,15 @@ def review(project_id: str, body: Review):
             raise ValueError("Technical checks failed")
         if body.approved and project.channel_id == "how-it-works" and not body.scientific_sources_checked:
             raise ValueError("Verify scientific sources before approval")
-        db.add(QualityReview(project_id=project_id, artifact_hash=artifact.sha256, approved=body.approved,
-                             notes=body.notes, checks={"scientific_sources_checked": body.scientific_sources_checked}))
+        db.add(
+            QualityReview(
+                project_id=project_id,
+                artifact_hash=artifact.sha256,
+                approved=body.approved,
+                notes=body.notes,
+                checks={"scientific_sources_checked": body.scientific_sources_checked},
+            )
+        )
         project.approved_hash = artifact.sha256 if body.approved else None
         project.status = "APPROVED" if body.approved else "HUMAN_REVIEW"
         return serialize(project)
@@ -153,8 +204,13 @@ def project_media(project_id: str, kind: str):
         if not artifact:
             raise HTTPException(404, "No render for current revision")
         movie = safe_path(settings.output_dir, artifact.path)
-        filename = {"video": "video.mp4", "thumbnail": "thumbnail.png", "captions": "captions.srt",
-                    "metadata": "metadata.json", "script": "script.json"}.get(kind)
+        filename = {
+            "video": "video.mp4",
+            "thumbnail": "thumbnail.png",
+            "captions": "captions.srt",
+            "metadata": "metadata.json",
+            "script": "script.json",
+        }.get(kind)
         if not filename or not (movie.parent / filename).is_file():
             raise HTTPException(404, "Artifact missing")
         return FileResponse(movie.parent / filename)
@@ -163,7 +219,10 @@ def project_media(project_id: str, kind: str):
 @router.get("/calendar")
 def calendar():
     with Session() as db:
-        return [serialize(x) for x in db.scalars(select(PublishingSchedule).order_by(PublishingSchedule.scheduled_at))]
+        return [
+            serialize(x)
+            for x in db.scalars(select(PublishingSchedule).order_by(PublishingSchedule.scheduled_at))
+        ]
 
 
 @router.post("/projects/{project_id}/schedule")
@@ -175,10 +234,16 @@ def schedule(project_id: str, body: Schedule):
         project = project_or_404(db, project_id)
         if body.mode == "youtube" and project.platform != "youtube":
             raise ValueError("TikTok has no native scheduling in this application")
-        conflict = db.scalar(select(PublishingSchedule).join(VideoProject).where(
-            VideoProject.channel_id == project.channel_id, PublishingSchedule.project_id != project_id,
-            PublishingSchedule.scheduled_at >= when-timedelta(seconds=60),
-            PublishingSchedule.scheduled_at <= when+timedelta(seconds=60)))
+        conflict = db.scalar(
+            select(PublishingSchedule)
+            .join(VideoProject)
+            .where(
+                VideoProject.channel_id == project.channel_id,
+                PublishingSchedule.project_id != project_id,
+                PublishingSchedule.scheduled_at >= when - timedelta(seconds=60),
+                PublishingSchedule.scheduled_at <= when + timedelta(seconds=60),
+            )
+        )
         if conflict:
             raise HTTPException(409, "Channel already has a publication within one minute")
         row = db.scalar(select(PublishingSchedule).where(PublishingSchedule.project_id == project_id))
@@ -225,14 +290,26 @@ def register_manual(project_id: str, body: ManualPublication):
         project = project_or_404(db, project_id)
         artifact, _ = approved(db, project)
         url = urlparse(body.url)
-        hosts = {"youtube": {"www.youtube.com", "youtube.com", "youtu.be"}, "tiktok": {"www.tiktok.com", "tiktok.com"}}
+        hosts = {
+            "youtube": {"www.youtube.com", "youtube.com", "youtu.be"},
+            "tiktok": {"www.tiktok.com", "tiktok.com"},
+        }
         if url.scheme != "https" or url.hostname not in hosts[project.platform] or not url.path.strip("/"):
             raise ValueError("Provide the final HTTPS URL on the correct platform")
-        row = db.scalar(select(PlatformPublication).where(PlatformPublication.project_id == project_id,
-            PlatformPublication.platform == project.platform, PlatformPublication.artifact_hash == artifact.sha256))
+        row = db.scalar(
+            select(PlatformPublication).where(
+                PlatformPublication.project_id == project_id,
+                PlatformPublication.platform == project.platform,
+                PlatformPublication.artifact_hash == artifact.sha256,
+            )
+        )
         if not row:
-            row = PlatformPublication(project_id=project_id, platform=project.platform,
-                                      artifact_hash=artifact.sha256, status="MANUAL_CONFIRMED")
+            row = PlatformPublication(
+                project_id=project_id,
+                platform=project.platform,
+                artifact_hash=artifact.sha256,
+                status="MANUAL_CONFIRMED",
+            )
             db.add(row)
         row.status, row.url = "MANUAL_CONFIRMED", body.url
         row.details = {"confirmation": "user", "api_verified": False}
@@ -257,13 +334,17 @@ def publication_refresh(publication_id: str):
 @router.get("/integrations/tiktok/creator")
 def tiktok_creator():
     from .integrations import TikTok
-    return {"direct_post_enabled": settings.tiktok_direct_post_enabled,
-            "creator": TikTok().creator_info() if settings.tiktok_direct_post_enabled else None}
+
+    return {
+        "direct_post_enabled": settings.tiktok_direct_post_enabled,
+        "creator": TikTok().creator_info() if settings.tiktok_direct_post_enabled else None,
+    }
 
 
 @router.post("/projects/{project_id}/tiktok-direct")
 def tiktok_direct(project_id: str, body: DirectPost):
     from .publishing import direct_post
+
     publication_id = direct_post(project_id, body)
     with Session() as db:
         return serialize(db.get(PlatformPublication, publication_id))
@@ -272,6 +353,7 @@ def tiktok_direct(project_id: str, body: DirectPost):
 @router.post("/publications/{publication_id}/thumbnail")
 def youtube_thumbnail(publication_id: str):
     from .integrations import Google
+
     with Session() as db:
         row = db.get(PlatformPublication, publication_id)
         if not row or row.platform != "youtube" or not row.remote_id:
@@ -281,12 +363,20 @@ def youtube_thumbnail(publication_id: str):
         if row.artifact_hash != artifact.sha256:
             raise ValueError("Publication is from an older revision")
         thumbnail = movie.parent / "thumbnail.png"
-        if not thumbnail.is_file() or thumbnail.stat().st_size > 2*1024*1024:
+        if not thumbnail.is_file() or thumbnail.stat().st_size > 2 * 1024 * 1024:
             raise ValueError("Thumbnail missing or exceeds YouTube 2MB limit")
         with thumbnail.open("rb") as source:
-            response = Google("youtube").request("POST", "https://www.googleapis.com/upload/youtube/v3/thumbnails/set",
-                params={"videoId": row.remote_id, "uploadType": "media"}, headers={"Content-Type": "image/png"},
-                content=source.read()).json()
+            response = (
+                Google("youtube")
+                .request(
+                    "POST",
+                    "https://www.googleapis.com/upload/youtube/v3/thumbnails/set",
+                    params={"videoId": row.remote_id, "uploadType": "media"},
+                    headers={"Content-Type": "image/png"},
+                    content=source.read(),
+                )
+                .json()
+            )
     with Session.begin() as db:
         row = db.get(PlatformPublication, publication_id)
         row.details = {**row.details, "thumbnail_response": response}

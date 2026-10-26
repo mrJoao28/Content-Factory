@@ -93,7 +93,8 @@ def library_delete(kind: str, entity_id: str):
             raise HTTPException(404, "Not found")
         if model is Series:
             if db.scalar(select(Character.id).where(Character.series_id == entity_id)) or db.scalar(
-                    select(VideoProject.id).where(VideoProject.series_id == entity_id)):
+                select(VideoProject.id).where(VideoProject.series_id == entity_id)
+            ):
                 raise HTTPException(409, "Series is still referenced")
         db.delete(row)
     return {"deleted": True}
@@ -101,13 +102,13 @@ def library_delete(kind: str, entity_id: str):
 
 async def save_upload(file, directory, suffix):
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / (str(uuid4())+suffix)
+    path = directory / (str(uuid4()) + suffix)
     total = 0
     try:
         with path.open("wb") as output:
-            while chunk := await file.read(1024*1024):
+            while chunk := await file.read(1024 * 1024):
                 total += len(chunk)
-                if total > settings.max_upload_mb*1024*1024:
+                if total > settings.max_upload_mb * 1024 * 1024:
                     raise HTTPException(413, "Upload exceeds configured limit")
                 output.write(chunk)
         if not total:
@@ -144,8 +145,13 @@ async def asset_import(file: UploadFile = File(...), license: str = "", kind: st
             if existing:
                 path.unlink()
                 return serialize(existing)
-            row = SceneAsset(name=Path(file.filename).stem[:100], kind=kind, license=license,
-                             path=str(path.relative_to(settings.assets_dir)), sha256=hashed)
+            row = SceneAsset(
+                name=Path(file.filename).stem[:100],
+                kind=kind,
+                license=license,
+                path=str(path.relative_to(settings.assets_dir)),
+                sha256=hashed,
+            )
             db.add(row)
             db.flush()
             return serialize(row)
@@ -179,8 +185,12 @@ async def import_audio(project_id: str, file: UploadFile = File(...)):
         with Session.begin() as db:
             project = project_or_404(db, project_id)
             no_running_job(db, project_id)
-            project.narration = {**project.narration, "path": str(path.relative_to(settings.storage_root)), "sha256": digest(path),
-                                 "duration": float(info["format"]["duration"])}
+            project.narration = {
+                **project.narration,
+                "path": str(path.relative_to(settings.storage_root)),
+                "sha256": digest(path),
+                "duration": float(info["format"]["duration"]),
+            }
             project.approved_hash = None
             project.revision += 1
             project.status = "DRAFT"
@@ -193,7 +203,6 @@ async def import_audio(project_id: str, file: UploadFile = File(...)):
         raise
 
 
-
 @router.post("/assets/audio", status_code=201)
 async def audio_asset_import(file: UploadFile = File(...), license: str = "", kind: str = "music"):
     suffix = Path(file.filename or "").suffix.lower()
@@ -204,7 +213,10 @@ async def audio_asset_import(file: UploadFile = File(...), license: str = "", ki
     path = await save_upload(file, settings.assets_dir / "imports", suffix)
     try:
         info = await asyncio.to_thread(probe, path)
-        if not any(x["codec_type"] == "audio" for x in info["streams"]) or float(info["format"]["duration"]) > 600:
+        if (
+            not any(x["codec_type"] == "audio" for x in info["streams"])
+            or float(info["format"]["duration"]) > 600
+        ):
             raise ValueError("Import decodable audio no longer than 600s")
         hashed = digest(path)
         with Session.begin() as db:
@@ -212,8 +224,13 @@ async def audio_asset_import(file: UploadFile = File(...), license: str = "", ki
             if existing:
                 path.unlink()
                 return serialize(existing)
-            row = SceneAsset(name=Path(file.filename).stem[:100], kind=kind, license=license,
-                             path=str(path.relative_to(settings.assets_dir)), sha256=hashed)
+            row = SceneAsset(
+                name=Path(file.filename).stem[:100],
+                kind=kind,
+                license=license,
+                path=str(path.relative_to(settings.assets_dir)),
+                sha256=hashed,
+            )
             db.add(row)
             db.flush()
             return serialize(row)
@@ -261,7 +278,9 @@ def narration_preview(project_id: str):
             path = safe_path(settings.storage_root, project.narration["path"])
         elif project.narration.get("generated_path"):
             path = Path(project.narration["generated_path"]).resolve()
-            if not path.is_relative_to(settings.output_dir) and not path.is_relative_to(settings.storage_root):
+            if not path.is_relative_to(settings.output_dir) and not path.is_relative_to(
+                settings.storage_root
+            ):
                 raise ValueError("Invalid narration path")
         else:
             raise HTTPException(404, "No narration generated or imported")

@@ -21,3 +21,7 @@ test-results/
 auth.json
 client_secret*.json
 coverage/
+
+.next-e2e-*/
+apps/web/data/
+*.egg-info/

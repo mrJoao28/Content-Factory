@@ -1,4 +1,5 @@
 """Available even offline; complements Ruff and does not replace it."""
+
 import ast
 from pathlib import Path
 

@@ -33,3 +33,15 @@ API: /docs fornece o contrato real. Para um worker separado, use `FACTORY_DISABL
 ## Sem rede
 
 O setup precisa baixar pacotes se nao estiverem instalados. `WinError 10013` indica bloqueio de rede do ambiente e nao um erro de senha. Este desenvolvimento utilizou pacotes Python preinstalados e tarballs npm do cache local, sem trocar implementacoes por mocks. Nao ha cache privado ou dependencia do proxy temporario no repositorio final; package-lock usa URLs oficiais.
+
+
+## Recover an interrupted installation / old development servers
+
+```powershell
+.\scripts\setup.ps1 -StopRunning
+.\scripts\dev.ps1
+```
+
+`-StopRunning` inspects command lines and stops only this repository's Python API and Next.js processes. It does not stop all Node/Python programs. Run it in the same Windows account that started the app. Alternatively, use `.\scripts\stop.ps1` separately. If process inspection or termination is denied, close the original development terminals with Ctrl+C and retry. No administrator access is required for processes owned by your account.
+
+Setup checks the native SWC module for a lock before installing dependencies. Dev checks both ports and the installed Next entrypoint before starting anything, starts Next directly through Node, waits for successful HTTP responses, and displays startup logs on failure. Cleanup errors do not replace the startup error. The READY message is displayed only after API and frontend answer successfully.

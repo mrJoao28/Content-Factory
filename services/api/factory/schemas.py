@@ -43,21 +43,27 @@ class ProjectCreate(Strict):
     @model_validator(mode="after")
     def duration(self):
         if self.target_duration is None:
-            self.target_duration = 480 if self.content_type == "episode" else 75 if self.channel_id == "how-it-works" else 35
+            self.target_duration = (
+                480 if self.content_type == "episode" else 75 if self.channel_id == "how-it-works" else 35
+            )
         if self.content_type == "episode" and not 360 <= self.target_duration <= 600:
             raise ValueError("Episodes require 360-600 seconds")
         if self.channel_id == "how-it-works" and not 65 <= self.target_duration <= 90:
             raise ValueError("Engineering videos require 65-90 seconds")
-        if self.channel_id == "wondernest" and self.content_type == "short" and not 20 <= self.target_duration <= 40:
+        if (
+            self.channel_id == "wondernest"
+            and self.content_type == "short"
+            and not 20 <= self.target_duration <= 40
+        ):
             raise ValueError("Kids Shorts require 20-40 seconds")
         return self
 
 
 class Keyframe(Strict):
     time: float = Field(ge=0, le=600)
-    x: float = Field(default=.5, ge=-2, le=3)
-    y: float = Field(default=.5, ge=-2, le=3)
-    scale: float = Field(default=1, ge=.01, le=4)
+    x: float = Field(default=0.5, ge=-2, le=3)
+    y: float = Field(default=0.5, ge=-2, le=3)
+    scale: float = Field(default=1, ge=0.01, le=4)
     rotation: float = Field(default=0, ge=-3600, le=3600)
     opacity: float = Field(default=1, ge=0, le=1)
     expression: Literal["happy", "surprised", "curious", "sad"] = "happy"
@@ -76,7 +82,7 @@ class Layer(Strict):
     essential: bool = True
     color: str = Field(default="#64e8cf", pattern=r"^#[0-9a-fA-F]{6}$")
     text: str = Field(default="", max_length=250)
-    size: float = Field(default=.2, ge=.01, le=1)
+    size: float = Field(default=0.2, ge=0.01, le=1)
     depth: float = Field(default=1, ge=0, le=2)
     keyframes: list[Keyframe] = Field(min_length=1, max_length=64)
 
@@ -101,7 +107,7 @@ class Camera(Strict):
 
 
 class Scene(Strict):
-    duration: float = Field(ge=.25, le=60)
+    duration: float = Field(ge=0.25, le=60)
     background: str = Field(default="#132139", pattern=r"^#[0-9a-fA-F]{6}$")
     narration: str = Field(default="", max_length=4000)
     layers: list[Layer] = Field(max_length=32)
@@ -215,7 +221,7 @@ class DirectPost(Strict):
     @field_validator("title")
     @classmethod
     def utf16_length(cls, value):
-        if len(value.encode("utf-16-le"))//2 > 2200:
+        if len(value.encode("utf-16-le")) // 2 > 2200:
             raise ValueError("TikTok caption exceeds 2200 UTF-16 code units")
         return value
 
@@ -227,11 +233,11 @@ class BatchCreate(Strict):
 class AudioCue(Strict):
     asset_id: str = Field(min_length=1, max_length=100)
     time: float = Field(ge=0, le=600)
-    volume: float = Field(default=.5, ge=0, le=1)
+    volume: float = Field(default=0.5, ge=0, le=1)
 
 
 class AudioMix(Strict):
     music_asset_id: str | None = None
-    music_volume: float = Field(default=.12, ge=0, le=.5)
-    narration_volume: float = Field(default=1, ge=.1, le=2)
+    music_volume: float = Field(default=0.12, ge=0, le=0.5)
+    narration_volume: float = Field(default=1, ge=0.1, le=2)
     effects: list[AudioCue] = Field(default_factory=list, max_length=32)

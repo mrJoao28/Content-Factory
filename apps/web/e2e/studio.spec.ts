@@ -31,3 +31,11 @@ test("review does not enable approval without a real render",async({page})=>{
  await expect(page.getByRole("heading",{name:"Choose a production"})).toBeVisible();
  await expect(page.getByRole("button",{name:"Approve video"})).toHaveCount(0);
 });
+
+test("settings exposes real Codex login status and device-code fallback",async({page})=>{
+ await page.goto("/settings");
+ await expect(page.getByRole("heading",{name:"Connect ChatGPT",exact:true})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Use device code",exact:true})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Verify login",exact:true})).toBeVisible();
+ await expect(page.getByText("codex login --device-auth",{exact:true})).toBeVisible();
+});

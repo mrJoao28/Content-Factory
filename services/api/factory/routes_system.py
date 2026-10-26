@@ -11,8 +11,16 @@ from .codex import auth_status, start_login
 from .config import settings
 from .db import Session
 from .integrations import Google, OAuth, TikTok
-from .models import (Channel, JobEvent, PlatformConnection, PlatformPublication, ProductionJob,
-                     RenderArtifact, UserSettings, VideoProject)
+from .models import (
+    Channel,
+    JobEvent,
+    PlatformConnection,
+    PlatformPublication,
+    ProductionJob,
+    RenderArtifact,
+    UserSettings,
+    VideoProject,
+)
 from .queue import ACTIVE
 
 router = APIRouter()
@@ -40,25 +48,48 @@ def dashboard(channel_id: str | None = None):
         projects = list(db.scalars(query))
         ids = [p.id for p in projects]
         artifacts = list(db.scalars(select(RenderArtifact).where(RenderArtifact.project_id.in_(ids))))
-        publications = list(db.scalars(select(PlatformPublication).where(PlatformPublication.project_id.in_(ids))))
+        publications = list(
+            db.scalars(select(PlatformPublication).where(PlatformPublication.project_id.in_(ids)))
+        )
+
         def count(states):
             return sum(p.status in states for p in projects)
-        sizes = sum(p.stat().st_size for root in (settings.storage_root, settings.output_dir, settings.assets_dir)
-                    for p in root.rglob("*") if p.is_file())
-        return {"projects": len(projects), "queued": count({"DRAFT"}), "running": count(ACTIVE-{"DRAFT"}),
-                "rendered": len({a.project_id for a in artifacts}), "approved": sum(bool(p.approved_hash) for p in projects),
-                "drive_uploaded": len({p.project_id for p in publications if p.platform == "drive" and p.status == "UPLOADED"}),
-                "scheduled": sum(p.status == "SCHEDULED" for p in publications),
-                "published": len({p.project_id for p in publications if p.status in {"PUBLISHED", "MANUAL_CONFIRMED"}}),
-                "failures": count({"FAILED"}), "storage_bytes": sizes,
-                "average_render_seconds": sum(a.render_seconds for a in artifacts)/len(artifacts) if artifacts else None,
-                "external_metrics": None}
+
+        sizes = sum(
+            p.stat().st_size
+            for root in (settings.storage_root, settings.output_dir, settings.assets_dir)
+            for p in root.rglob("*")
+            if p.is_file()
+        )
+        return {
+            "projects": len(projects),
+            "queued": count({"DRAFT"}),
+            "running": count(ACTIVE - {"DRAFT"}),
+            "rendered": len({a.project_id for a in artifacts}),
+            "approved": sum(bool(p.approved_hash) for p in projects),
+            "drive_uploaded": len(
+                {p.project_id for p in publications if p.platform == "drive" and p.status == "UPLOADED"}
+            ),
+            "scheduled": sum(p.status == "SCHEDULED" for p in publications),
+            "published": len(
+                {p.project_id for p in publications if p.status in {"PUBLISHED", "MANUAL_CONFIRMED"}}
+            ),
+            "failures": count({"FAILED"}),
+            "storage_bytes": sizes,
+            "average_render_seconds": sum(a.render_seconds for a in artifacts) / len(artifacts)
+            if artifacts
+            else None,
+            "external_metrics": None,
+        }
 
 
 @router.get("/jobs")
 def jobs():
     with Session() as db:
-        return [serialize(x) for x in db.scalars(select(ProductionJob).order_by(ProductionJob.created_at.desc()).limit(500))]
+        return [
+            serialize(x)
+            for x in db.scalars(select(ProductionJob).order_by(ProductionJob.created_at.desc()).limit(500))
+        ]
 
 
 @router.get("/events")
@@ -88,8 +119,12 @@ async def event_stream(request: Request, project_id: str | None = None, after: i
             if not rows:
                 yield ": heartbeat\n\n"
             await asyncio.sleep(1)
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/auth/codex")
@@ -98,8 +133,15 @@ def codex_connection():
 
 
 @router.post("/auth/codex/connect")
-def codex_connect():
-    return start_login()
+def codex_connect(mode: str = "browser"):
+    return start_login(mode)
+
+
+@router.post("/auth/codex/cancel")
+def codex_cancel():
+    from .codex_auth import login_manager
+
+    return login_manager.cancel()
 
 
 @router.get("/connections")
@@ -158,17 +200,23 @@ def drive_layout():
 def user_settings():
     with Session() as db:
         row = db.get(UserSettings, "preferences")
-        return {"timezone": settings.default_timezone, "require_human_approval": settings.require_human_approval,
-                "auto_publish": False, "render_concurrency": 1, "voice_configured": bool(settings.piper_voice_path),
-                **(row.values if row else {})}
+        return {
+            "timezone": settings.default_timezone,
+            "require_human_approval": settings.require_human_approval,
+            "auto_publish": False,
+            "render_concurrency": 1,
+            "voice_configured": bool(settings.piper_voice_path),
+            **(row.values if row else {}),
+        }
 
 
 @router.patch("/settings")
 def update_settings(body: dict):
-    if set(body)-{"timezone", "editorial_goals", "drive_folder_id"}:
+    if set(body) - {"timezone", "editorial_goals", "drive_folder_id"}:
         raise ValueError("Unsupported setting; edit local .env for system configuration")
     if "timezone" in body:
         from zoneinfo import ZoneInfo
+
         try:
             ZoneInfo(body["timezone"])
         except (KeyError, TypeError) as exc:
@@ -189,26 +237,40 @@ def update_settings(body: dict):
 @router.get("/doctor")
 def doctor():
     from .doctor import diagnose
+
     return diagnose()
 
 
 @router.get("/analytics")
 def analytics(channel_id: str):
     from .models import AnalyticsSnapshot
+
     with Session() as db:
-        return [serialize(x) for x in db.scalars(select(AnalyticsSnapshot).where(
-            AnalyticsSnapshot.channel_id == channel_id).order_by(AnalyticsSnapshot.created_at.desc()).limit(60))]
+        return [
+            serialize(x)
+            for x in db.scalars(
+                select(AnalyticsSnapshot)
+                .where(AnalyticsSnapshot.channel_id == channel_id)
+                .order_by(AnalyticsSnapshot.created_at.desc())
+                .limit(60)
+            )
+        ]
 
 
 @router.post("/analytics/sync/youtube")
 def sync_youtube_analytics():
     from .models import AnalyticsSnapshot
+
     response = Google("youtube").identity()
     items = response.get("items", [])
     if not items or (settings.youtube_channel_id and items[0]["id"] != settings.youtube_channel_id):
         raise ValueError("Verify the expected YouTube channel before syncing")
-    metrics = {"channel_id": items[0]["id"], "statistics": items[0].get("statistics", {}),
-               "retention": None, "watch_time": None}
+    metrics = {
+        "channel_id": items[0]["id"],
+        "statistics": items[0].get("statistics", {}),
+        "retention": None,
+        "watch_time": None,
+    }
     with Session.begin() as db:
         row = AnalyticsSnapshot(channel_id="wondernest", source="youtube-data-api", metrics=metrics)
         db.add(row)

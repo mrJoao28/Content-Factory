@@ -54,10 +54,13 @@ class Settings(BaseSettings):
             setattr(self, name, path.resolve())
         if self.database_url.startswith("sqlite:///./"):
             self.database_url = "sqlite:///" + str(ROOT / self.database_url.removeprefix("sqlite:///./"))
-        if (self.render_default_width % 2 or self.render_default_height % 2 or
-                not 360 <= self.render_default_width <= 1080 or
-                not 640 <= self.render_default_height <= 1920 or
-                abs(self.render_default_width/self.render_default_height-9/16) > .001):
+        if (
+            self.render_default_width % 2
+            or self.render_default_height % 2
+            or not 360 <= self.render_default_width <= 1080
+            or not 640 <= self.render_default_height <= 1920
+            or abs(self.render_default_width / self.render_default_height - 9 / 16) > 0.001
+        ):
             raise ValueError("Default vertical resolution must be even, 9:16, between 360x640 and 1080x1920")
         if self.auto_publish:
             raise ValueError("Automatic timer-based publication is not enabled in this version")
