@@ -55,4 +55,5 @@ tests/test_pipeline.py
 tests/test_publishing.py
 tests/test_queue.py
 tests/test_render.py
+tests/test_runtime_readiness.py
 tests/test_windows_scripts.py

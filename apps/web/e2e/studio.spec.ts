@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
 test("real dashboard, project creation, queue and independent channels",async({page})=>{
  await page.goto("/");
@@ -71,4 +73,35 @@ test("direct ChatGPT authorization UI cancels, recovers and requests explicit pl
  await expect(page.getByText("Inference VERIFIED for fixture-model",{exact:true})).toBeVisible();
  const storage=await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage}));
  expect(storage).not.toContain("access_token");expect(storage).not.toContain("refresh_token");
+});
+
+
+test("failed production switches explicitly to ChatGPT and resumes through real API routes",async({page,request})=>{
+ test.skip(process.platform!=="win32","Browser fixture requires the Windows DPAPI vault; no plaintext fallback.");
+ const base="http://127.0.0.1:8001";const headers={"X-Factory-Client":"local"};
+ await request.patch(base+"/settings",{headers,data:{ai_provider:"codex"}});
+ const created=await request.post(base+"/projects",{headers,data:{idea:"Recover a failed browser production with its existing checkpoints",channel_id:"wondernest"}});
+ expect(created.status()).toBe(201);const project=await created.json();
+ const root=path.resolve(process.cwd(),"../..");
+ execFileSync(path.join(root,".venv/Scripts/python.exe"),[path.join(root,"tests/seed_browser_recovery.py"),project.id],{cwd:root,env:process.env,windowsHide:true});
+ await request.patch(base+"/settings",{headers,data:{ai_provider:"chatgpt"}});
+ await page.goto("/preview");
+ await page.evaluate(id=>{localStorage.setItem("factory-project",id);localStorage.setItem("factory-channel","wondernest");},project.id);
+ await page.reload();
+ await expect(page.getByText("Production needs attention",{exact:true})).toBeVisible();
+ await expect(page.getByText("Production interrupted: SCRIPTING",{exact:true})).toBeVisible();
+ await expect(page.getByText("Codex failed; check CLI version, ChatGPT login and usage limits",{exact:true})).toBeVisible();
+ const recovery=page.getByRole("region",{name:"Production text selection"});
+ await expect(recovery.getByText("codex / no direct account / provider default",{exact:false})).toBeVisible();
+ await expect(recovery.getByText(/New selection: chatgpt/)).toBeVisible();
+ const button=recovery.getByRole("button",{name:"Use selected ChatGPT and resume",exact:true});
+ await expect(button).toBeDisabled();
+ await recovery.getByRole("checkbox").check();
+ await button.click();
+ await expect(page.getByText("Text selection applied and production resumed; completed checkpoints retained",{exact:true})).toBeVisible();
+ const detail=await (await request.get(base+`/projects/${project.id}`)).json();
+ expect(detail.jobs).toHaveLength(1);expect(detail.jobs[0].state).toBe("DRAFT");expect(detail.jobs[0].error).toBeNull();
+ expect(detail.jobs[0].checkpoint._ai_selection.provider).toBe("chatgpt");
+ expect(detail.jobs[0].checkpoint.creative_director.summary).toBe("Retained browser-test checkpoint");
+ expect(detail.artifacts).toHaveLength(0);
 });

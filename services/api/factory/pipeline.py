@@ -16,7 +16,7 @@ from .models import (
     VideoProject,
     VideoScene,
 )
-from .providers import get_provider
+from .providers import get_provider, job_selection, validate_selection
 from .queue import checkpoint, event
 from .render import probe, render, validate_video
 from .schemas import AgentResult, AudioMix, Board, Metadata, Script
@@ -28,6 +28,22 @@ def produce(job_id, owner, cancel=lambda: False):
         job = db.get(ProductionJob, job_id)
         project = db.get(VideoProject, job.project_id)
         project_id, revision = project.id, project.revision
+        artifact = db.scalar(
+            select(RenderArtifact).where(
+                RenderArtifact.project_id == project_id, RenderArtifact.revision == revision
+            )
+        )
+        if artifact:
+            movie = safe_path(settings.output_dir, artifact.path)
+            if (
+                movie.is_file()
+                and digest(movie) == artifact.sha256
+                and artifact.probe.get("checks")
+                and all(artifact.probe["checks"].values())
+            ):
+                restored = "APPROVED" if project.approved_hash == artifact.sha256 else "HUMAN_REVIEW"
+                checkpoint(job_id, owner, restored)
+                return
         context = {
             "idea": project.idea,
             "channel": project.channel_id,
@@ -50,11 +66,9 @@ def produce(job_id, owner, cancel=lambda: False):
         ]
         context["visual_medium"] = "2.5D geometric or imported transparent sprites; not physical 3D"
         saved = dict(job.checkpoint)
-    selection = saved.get("_ai_selection", {"provider": "codex"})
-    if selection["provider"] == "chatgpt" and (not selection.get("account_id") or not selection.get("model")):
-        from .chatgpt import accounts
-
-        selection = accounts.binding()
+        selection, _ = job_selection(db, job)
+    selection = validate_selection(selection)
+    if saved.get("_ai_selection") != selection:
         checkpoint(job_id, owner, "SCRIPTING", "_ai_selection", selection)
         saved["_ai_selection"] = selection
     provider = get_provider(selection)
@@ -64,16 +78,27 @@ def produce(job_id, owner, cancel=lambda: False):
         if key not in saved:
             checkpoint(job_id, owner, stage)
             event(project_id, stage, role + ": started")
+            emitted = set()
+
+            def progress(kind):
+                if kind not in emitted:
+                    emitted.add(kind)
+                    event(project_id, stage, role + ": " + kind)
+
             result = provider.generate(
                 role,
                 context,
                 response_type,
                 cancel=cancel,
-                emit=lambda kind: event(project_id, stage, role + ": " + kind),
+                emit=progress,
             )
             with provider.persistence_guard():
+                sources = {**saved.get("_ai_step_sources", {}), key: selection}
+                checkpoint(job_id, owner, stage, "_ai_step_sources", sources)
+                saved["_ai_step_sources"] = sources
                 saved[key] = result.model_dump(mode="json")
                 checkpoint(job_id, owner, stage, key, saved[key])
+                event(project_id, stage, role + ": completed")
         context[key] = saved[key]
         return response_type.model_validate(saved[key])
 

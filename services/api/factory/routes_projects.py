@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from .api_helpers import no_running_job, project_or_404, serialize
 from .config import settings
@@ -144,6 +144,7 @@ def edit_project(project_id: str, body: ProjectEdit):
 @router.post("/projects/{project_id}/jobs/{action}")
 def control_job(project_id: str, action: str):
     with Session.begin() as db:
+        db.execute(text("BEGIN IMMEDIATE"))
         project = project_or_404(db, project_id)
         job = db.scalar(
             select(ProductionJob).where(
@@ -156,6 +157,12 @@ def control_job(project_id: str, action: str):
                 job = enqueue(db, project)
             elif job.state not in WAITING | {"CANCELLED", "DRAFT"}:
                 raise HTTPException(409, "Only waiting or stopped jobs may resume")
+            from .providers import job_selection, validate_selection
+            from .routes_chatgpt import controlled
+
+            selection = controlled(lambda: validate_selection(job_selection(db, job)[0]))
+            job.checkpoint = {k: v for k, v in job.checkpoint.items() if k != "_failure"}
+            job.checkpoint = {**job.checkpoint, "_ai_selection": selection}
             job.state, job.error, job.available_at = "DRAFT", None, utcnow()
             job.owner, job.lease_until = None, None
             project.status = "DRAFT"

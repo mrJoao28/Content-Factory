@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .chatgpt import accounts, login
 from .chatgpt_http import ChatGPTError, ChatGPTTransient
 from .chatgpt_provider import ChatGPTProvider
-from .providers import configured_provider
+from .providers import configured_provider, provider_configuration
 from .schemas import AgentResult
 from .security import Cancelled, ConfigurationRequired
 
@@ -24,6 +24,13 @@ class LoginRequest(BaseModel):
 class ModelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     model: str = Field(min_length=1, max_length=200)
+
+
+class SelectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirm_plan_usage: bool = Field(default=False, strict=True)
+    resume: bool = Field(default=False, strict=True)
+    expected_selection: dict | None = None
 
 
 class TestRequest(BaseModel):
@@ -49,7 +56,12 @@ def controlled(action):
 @router.get("/auth/chatgpt")
 def status(response: Response):
     response.headers["Cache-Control"] = "no-store"
-    return {**accounts.status(), "login": login.status(), "provider": configured_provider()}
+    return {
+        **accounts.status(),
+        "login": login.status(),
+        "provider": configured_provider(),
+        "configuration": provider_configuration(),
+    }
 
 
 @router.post("/auth/chatgpt/connect")
@@ -132,20 +144,21 @@ async def test_connection(body: TestRequest, request: Request):
 
 
 @router.post("/projects/{project_id}/text-selection")
-def change_job_selection(project_id: str, body: TestRequest):
+def change_job_selection(project_id: str, body: SelectionRequest):
     if not body.confirm_plan_usage:
         raise HTTPException(
             400, "Confirm replacing this job's text connection/model with the current selection."
         )
-    from sqlalchemy import select
+    from sqlalchemy import select, text
 
     from .api_helpers import no_running_job, project_or_404, serialize
     from .db import Session
-    from .models import ProductionJob
-    from .providers import new_selection
+    from .models import JobEvent, ProductionJob, utcnow
+    from .providers import job_selection, new_selection, validate_selection
     from .queue import WAITING
 
     with Session.begin() as db:
+        db.execute(text("BEGIN IMMEDIATE"))
         project = project_or_404(db, project_id)
         no_running_job(db, project_id)
         job = db.scalar(
@@ -153,16 +166,33 @@ def change_job_selection(project_id: str, body: TestRequest):
                 ProductionJob.project_id == project.id, ProductionJob.revision == project.revision
             )
         )
+        selection = controlled(lambda: validate_selection(new_selection(db)))
+        if body.expected_selection is not None and body.expected_selection != selection:
+            raise HTTPException(409, "The selected connection/model changed. Review the new selection first.")
+        if job and body.resume and job.state == "DRAFT" and job.checkpoint.get("_ai_selection") == selection:
+            return serialize(job)
         if not job or job.state not in WAITING:
             raise HTTPException(409, "Only a waiting job can change text selection")
-        selection = new_selection(db)
-        if selection["provider"] == "chatgpt" and not selection.get("model"):
-            raise HTTPException(409, "Connect ChatGPT and select a model first")
         history = list(job.checkpoint.get("_ai_selection_history", []))
-        history.append(job.checkpoint.get("_ai_selection", {"provider": "codex"}))
+        previous, _ = job_selection(db, job)
+        if previous != selection:
+            history.append(previous or {"provider": "unresolved"})
         job.checkpoint = {
             **job.checkpoint,
             "_ai_selection": selection,
             "_ai_selection_history": history[-50:],
         }
+        if previous != selection:
+            db.add(
+                JobEvent(
+                    project_id=project.id,
+                    stage=job.state,
+                    message=f"Text selection changed explicitly: {(previous or {}).get('provider', 'unresolved')} -> {selection['provider']}; completed checkpoints retained",
+                )
+            )
+        if body.resume:
+            job.checkpoint = {k: v for k, v in job.checkpoint.items() if k != "_failure"}
+            job.state, job.error, job.available_at = "DRAFT", None, utcnow()
+            job.owner, job.lease_until = None, None
+            project.status = "DRAFT"
         return serialize(job)

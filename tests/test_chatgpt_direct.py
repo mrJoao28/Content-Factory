@@ -210,9 +210,10 @@ def test_login_through_real_api_routes_reaches_chatgpt_not_platform_oauth(connec
     assert status["login"]["state"] == "COMPLETE"
     account_id = status["active_id"]
     assert client.post(f"/auth/chatgpt/accounts/{account_id}/models", json={}).status_code == 200
-    assert client.post(
-        f"/auth/chatgpt/accounts/{account_id}/model", json={"model": "example-model"}
-    ).status_code == 200
+    assert (
+        client.post(f"/auth/chatgpt/accounts/{account_id}/model", json={"model": "example-model"}).status_code
+        == 200
+    )
     assert client.post("/auth/chatgpt/connect", json={"unknown": True}).status_code == 422
     assert "fixture-access" not in json.dumps(status)
 
@@ -644,9 +645,9 @@ def test_timeout_stops_stream_and_late_error_is_not_success(connection, monkeypa
 def test_direct_pipeline_resume_preserves_completed_steps_and_real_render(
     connection, client, monkeypatch, channel
 ):
-    from factory import chatgpt, pipeline
+    from factory import chatgpt
     from factory.db import Session
-    from factory.models import RenderArtifact, ScriptVersion, VideoProject
+    from factory.models import ProductionJob, RenderArtifact, ScriptVersion, VideoProject
     from factory.queue import Worker
     from factory.schemas import Metadata, Script
     from sqlalchemy import func, select
@@ -701,8 +702,16 @@ def test_direct_pipeline_resume_preserves_completed_steps_and_real_render(
         )
 
     transport = httpx.MockTransport(handler)
+    original_async_client = httpx.AsyncClient
     monkeypatch.setattr(
-        pipeline, "get_provider", lambda selection: ChatGPTProvider(accounts, selection, transport)
+        httpx, "AsyncClient", lambda **kwargs: original_async_client(**{**kwargs, "transport": transport})
+    )
+    from factory import codex
+
+    monkeypatch.setattr(
+        codex.CodexProvider,
+        "generate",
+        lambda *args, **kwargs: pytest.fail("Codex forbidden in direct production"),
     )
     created = client.post(
         "/projects",
@@ -714,6 +723,14 @@ def test_direct_pipeline_resume_preserves_completed_steps_and_real_render(
         project = db.get(VideoProject, project_id)
         project.target_duration, project.width, project.height = 2, 160, 284
         project.narration = {"path": "voice.wav"}
+        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == project_id))
+        job.state, job.error = "FAILED", "Codex failed; check CLI version, ChatGPT login and usage limits"
+        job.checkpoint = {"_ai_selection": {"provider": "codex"}}
+    recovery = client.post(
+        f"/projects/{project_id}/text-selection",
+        json={"confirm_plan_usage": True, "resume": True, "expected_selection": accounts.binding()},
+    )
+    assert recovery.status_code == 200, recovery.text
     assert Worker().once()
     detail = client.get(f"/projects/{project_id}").json()
     assert detail["status"] == "WAITING_FOR_AUTH"
@@ -728,6 +745,15 @@ def test_direct_pipeline_resume_preserves_completed_steps_and_real_render(
     assert client.get(f"/projects/{project_id}/media/video").status_code == 200
     assert detail["approved_hash"] is None
     assert "fixture-access" not in json.dumps(detail)
+    # Simulate a restart after committing the artifact but before the final job checkpoint.
+    calls_before_restart = list(calls)
+    with Session.begin() as db:
+        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == project_id))
+        job.state = "DRAFT"
+        db.get(VideoProject, project_id).status = "DRAFT"
+    assert Worker().once()
+    assert client.get(f"/projects/{project_id}").json()["status"] == "HUMAN_REVIEW"
+    assert calls == calls_before_restart
     with Session() as db:
         assert db.scalar(select(func.count()).select_from(ScriptVersion)) == 1
         assert db.scalar(select(func.count()).select_from(RenderArtifact)) == 1
@@ -983,3 +1009,170 @@ def test_real_api_startup_without_codex_dependencies_or_api_key(tmp_path):
             assert detail["jobs"][0]["checkpoint"]["_ai_selection"]["provider"] == "chatgpt"
     finally:
         terminate_tree(process)
+
+
+def test_new_project_uses_saved_provider_and_explains_precedence(connection, client, monkeypatch):
+    from factory import chatgpt
+
+    _, accounts, _ = connection
+    authorize(connection)
+    monkeypatch.setattr(chatgpt, "accounts", accounts)
+    monkeypatch.setattr(settings, "ai_provider", "codex")
+    assert client.patch("/settings", json={"ai_provider": "chatgpt"}).status_code == 200
+    project = client.post(
+        "/projects", json={"idea": "A fresh explicit provider selection", "channel_id": "wondernest"}
+    ).json()
+    job = client.get(f"/projects/{project['id']}").json()["jobs"][0]
+    assert job["checkpoint"]["_ai_selection"] == accounts.binding()
+    assert job["diagnostic"]["global"]["source"] == "saved_settings"
+    assert job["diagnostic"]["global"]["environment_provider"] == "codex"
+
+
+def test_unknown_legacy_selection_never_falls_back_to_codex(client, monkeypatch):
+    from factory import codex
+    from factory.db import Session
+    from factory.models import ProductionJob
+    from factory.queue import Worker
+    from sqlalchemy import select
+
+    monkeypatch.setattr(
+        codex.CodexProvider, "generate", lambda *a, **k: pytest.fail("Implicit Codex execution")
+    )
+    project = client.post(
+        "/projects", json={"idea": "Legacy job without historical evidence", "channel_id": "wondernest"}
+    ).json()
+    with Session.begin() as db:
+        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == project["id"]))
+        job.checkpoint = {}
+    assert Worker().once()
+    detail = client.get(f"/projects/{project['id']}").json()
+    job = detail["jobs"][0]
+    assert job["state"] == "WAITING_FOR_MODEL"
+    assert job["diagnostic"]["selection"] is None
+    assert job["diagnostic"]["code"] == "selection_required"
+    response = client.post(f"/projects/{project['id']}/jobs/resume", json={})
+    assert response.status_code == 409
+
+
+def test_failed_historical_job_explicit_recovery_is_atomic_and_idempotent(connection, client, monkeypatch):
+    from factory import chatgpt
+    from factory.db import Session
+    from factory.models import JobEvent, ProductionJob, VideoProject, utcnow
+    from sqlalchemy import select
+
+    _, accounts, _ = connection
+    authorize(connection)
+    monkeypatch.setattr(chatgpt, "accounts", accounts)
+    client.patch("/settings", json={"ai_provider": "chatgpt"})
+    project = client.post(
+        "/projects", json={"idea": "Recover one historical Codex production", "channel_id": "wondernest"}
+    ).json()
+    other = client.post(
+        "/projects", json={"idea": "Do not alter this other production", "channel_id": "wondernest"}
+    ).json()
+    old_error = "Codex failed; check CLI version, ChatGPT login and usage limits"
+    with Session.begin() as db:
+        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == project["id"]))
+        job.state = "FAILED"
+        job.error = old_error
+        job.checkpoint = {"creative_director": {"summary": "Already completed", "flags": []}}
+        db.add(JobEvent(project_id=project["id"], stage="SCRIPTING", message="Creative Director: started"))
+        db.add(JobEvent(project_id=project["id"], stage="FAILED", message=old_error, level="error"))
+        db.flush()
+        job.updated_at = utcnow()
+        db.get(VideoProject, project["id"]).status = "FAILED"
+    detail = client.get(f"/projects/{project['id']}").json()
+    diagnostic = detail["jobs"][0]["diagnostic"]
+    assert diagnostic["selection"] == {"provider": "codex"}
+    assert diagnostic["selection_source"] == "historical_codex_failure"
+    assert diagnostic["stage"] == "SCRIPTING"
+    before_other = client.get(f"/projects/{other['id']}").json()
+    endpoint = f"/projects/{project['id']}/text-selection"
+    body = {"confirm_plan_usage": True, "resume": True, "expected_selection": accounts.binding()}
+    assert (
+        client.post(endpoint, json={**body, "expected_selection": {"provider": "codex"}}).status_code == 409
+    )
+    assert client.get(f"/projects/{project['id']}").json()["jobs"][0]["error"] == old_error
+    first = client.post(endpoint, json=body)
+    assert first.status_code == 200, first.text
+    second = client.post(endpoint, json=body)
+    assert second.status_code == 200, second.text
+    saved = second.json()
+    assert saved["id"] == first.json()["id"]
+    assert saved["state"] == "DRAFT" and saved["error"] is None
+    assert saved["checkpoint"]["creative_director"]["summary"] == "Already completed"
+    assert saved["checkpoint"]["_ai_selection_history"] == [{"provider": "codex"}]
+    assert len(client.get(f"/projects/{project['id']}").json()["jobs"]) == 1
+    assert client.get(f"/projects/{other['id']}").json() == before_other
+
+
+def test_recovery_rejects_active_lease_and_upload_before_modifying_job(connection, client, monkeypatch):
+    from datetime import timedelta
+
+    from factory import chatgpt
+    from factory.db import Session
+    from factory.models import PlatformPublication, ProductionJob, utcnow
+    from sqlalchemy import select
+
+    _, accounts, _ = connection
+    authorize(connection)
+    monkeypatch.setattr(chatgpt, "accounts", accounts)
+    client.patch("/settings", json={"ai_provider": "chatgpt"})
+    project = client.post(
+        "/projects", json={"idea": "A leased production must not change", "channel_id": "wondernest"}
+    ).json()
+    with Session.begin() as db:
+        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == project["id"]))
+        job.state, job.owner, job.lease_until = "FAILED", "other-worker", utcnow() + timedelta(seconds=30)
+    endpoint = f"/projects/{project['id']}/text-selection"
+    body = {"confirm_plan_usage": True, "resume": True}
+    assert client.post(endpoint, json=body).status_code == 409
+    with Session.begin() as db:
+        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == project["id"]))
+        job.owner, job.lease_until = None, None
+        db.add(
+            PlatformPublication(
+                project_id=project["id"],
+                platform="youtube",
+                status="UPLOADING",
+                artifact_hash="recovery-test",
+            )
+        )
+    assert client.post(endpoint, json=body).status_code == 409
+
+
+@pytest.mark.parametrize(
+    "missing,expected", [("account", "WAITING_FOR_AUTH"), ("model", "WAITING_FOR_MODEL")]
+)
+def test_recovery_validation_preserves_previous_error(connection, client, monkeypatch, missing, expected):
+    from factory import chatgpt
+    from factory.db import Session
+    from factory.models import ProductionJob
+    from sqlalchemy import select
+
+    _, accounts, _ = connection
+    authorize(connection)
+    monkeypatch.setattr(chatgpt, "accounts", accounts)
+    client.patch("/settings", json={"ai_provider": "chatgpt"})
+    project = client.post(
+        "/projects",
+        json={"idea": "Validate connection before recovery " + missing, "channel_id": "wondernest"},
+    ).json()
+    with Session.begin() as db:
+        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == project["id"]))
+        job.state, job.error = "FAILED", "Previous failure retained"
+
+    def remove(state):
+        if missing == "account":
+            state["accounts"] = []
+            state["active_id"] = None
+        else:
+            state["accounts"][0]["model"] = None
+
+    accounts.store.update(remove)
+    result = client.post(
+        f"/projects/{project['id']}/text-selection", json={"confirm_plan_usage": True, "resume": True}
+    )
+    assert result.status_code == 409
+    assert result.json()["detail"]["state"] == expected
+    assert client.get(f"/projects/{project['id']}").json()["jobs"][0]["error"] == "Previous failure retained"

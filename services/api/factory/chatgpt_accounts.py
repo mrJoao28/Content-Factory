@@ -72,7 +72,12 @@ class ChatGPTAccounts:
     def session(self, account_id, model):
         state = self.store.read()
         account = account_in(state, account_id)
-        if not account or not account.get("tokens") or state.get("active_id") != account_id:
+        if (
+            not account
+            or not account.get("tokens")
+            or state.get("active_id") != account_id
+            or account.get("auth_state") == "EXPIRED"
+        ):
             raise ChatGPTError(
                 "ChatGPT authentication required for this production's original connection. Reconnect and resume."
             )
@@ -181,7 +186,12 @@ class ChatGPTAccounts:
     def select_model(self, account_id, model):
         def save(state):
             account = account_in(state, account_id)
-            if not account or not account.get("tokens") or state.get("active_id") != account_id:
+            if (
+                not account
+                or not account.get("tokens")
+                or state.get("active_id") != account_id
+                or account.get("auth_state") == "EXPIRED"
+            ):
                 raise ChatGPTError("ChatGPT authentication required")
             if model not in {m["slug"] for m in account.get("models", [])}:
                 raise ValueError("Choose a model from the authenticated catalog")

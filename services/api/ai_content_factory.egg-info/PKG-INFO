@@ -14,6 +14,7 @@ Requires-Dist: keyring<27,>=25
 Requires-Dist: imageio-ffmpeg<1,>=0.6
 Requires-Dist: PyJWT[crypto]<3,>=2.10
 Requires-Dist: filelock<4,>=3.18
+Requires-Dist: tzdata>=2025.1
 Provides-Extra: codex
 Requires-Dist: openai-codex; extra == "codex"
 Provides-Extra: dev

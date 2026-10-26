@@ -41,7 +41,7 @@ Inferencia usa somente POST https://api.openai.com/v1/responses, com Bearer OAut
 
 ## Configuracao e limites
 
-- AI_PROVIDER=chatgpt: recomendado para instalacoes novas. AI_PROVIDER=codex: compatibilidade explicita. A preferencia salva em Settings tem precedencia. Sem AI_PROVIDER, uma configuracao legada explicita CODEX_PROVIDER preserva Codex; jobs legados sem marcador tambem continuam Codex.
+- AI_PROVIDER=chatgpt: recomendado para instalacoes novas. AI_PROVIDER=codex: compatibilidade explicita. A preferencia salva em Settings tem precedencia. Sem AI_PROVIDER, uma configuracao legada explicita CODEX_PROVIDER preserva Codex; jobs legados sem marcador exigem evidencia historica ou escolha explicita; consulte PROVIDER_RECOVERY.md.
 - CHATGPT_LOGIN_TIMEOUT_SECONDS=300: inteiro de 1 a 600 segundos.
 - CODEX_TIMEOUT_SECONDS=300: prazo total de geracao textual, compartilhado com o provider direto. Operacoes OAuth/catalogo possuem timeout HTTP de 15 segundos.
 - CODEX_MAX_CONCURRENT_JOBS=1: processamento textual sequencial; fila possui lease SQLite e o teste explicito usa o mesmo limite do provider direto.
@@ -69,3 +69,7 @@ Documentacao oficial consultada em 2026-10-26:
 Base Content Factory: 1e455b8d57b7d1738de10281d769e9235e070233. Referencia de comportamento My-Code-Agent: 9f2212aebff6baecc7edd54be81d04e4d41459a4 (chatgpt.ts, chatgpt-store.ts, providers/chatgpt.ts, providers/chatgpt-stream.ts, routes/chatgpt.ts, testes e docs/CHATGPT_E_MODELOS_LOCAIS.md).
 
 Nao foi encontrada uma licenca de reutilizacao na arvore da referencia inspecionada. Nenhum codigo TypeScript foi copiado ou traduzido; esta implementacao Python foi escrita a partir do contrato oficial. Diferencas deliberadas: vault DPAPI/backend seguro em vez de arquivo JSON de tokens; nenhuma ferramenta de programacao; somente texto estruturado; o compositor audiovisual existente permanece independente.
+
+## Producao antiga falhando em Codex
+
+Consulte [PROVIDER_RECOVERY.md](PROVIDER_RECOVERY.md) para comparar a selecao global com a selecao da tarefa e recuperar pela fila ou revisao sem recriar o projeto. O botao Use selected ChatGPT and resume exige confirmar o uso do plano, preserva checkpoints e valida a conexao antes da troca.

@@ -7,7 +7,7 @@ import { Badge, type Act } from "./studio";
 import { api, send } from "@/lib/api";
 
 type Account = {id:string;label:string;connected:boolean;active:boolean;model:string|null;models:{slug:string;display_name:string}[];inference_verified:boolean};
-export type ChatGPTStatus = {state:string;provider:"chatgpt"|"codex";accounts:Account[];active_id:string|null;message?:string;login:{id?:string;state:string;url?:string;message?:string}};
+export type ChatGPTStatus = {state:string;provider:"chatgpt"|"codex";configuration?:{source:string};accounts:Account[];active_id:string|null;message?:string;login:{id?:string;state:string;url?:string;message?:string}};
 const waiting=(state?:string)=>state==="WAITING"||state==="EXCHANGING";
 
 export function ChatGPTSettings({act}:{act:Act}) {
@@ -21,7 +21,7 @@ export function ChatGPTSettings({act}:{act:Act}) {
  const run=(action:()=>Promise<unknown>,message:string)=>{if(busy)return;setBusy(true);act(async()=>{try{await action();await status.refetch();await client.invalidateQueries({queryKey:["preferences"]});}finally{setBusy(false);}},message);};
  const connect=(account_id?:string)=>run(()=>send("/auth/chatgpt/connect",{account_id}),"Follow the official browser authorization, then return here.");
  return <div><h2>Continue with ChatGPT</h2><p>Authorize Content Factory to generate scripts, storyboards, reviews and metadata using your ChatGPT plan. This connection does not generate images or videos.</p>
- <label>Text provider<select aria-label="Text provider" value={data?.provider||""} disabled={!data||busy||pending} onChange={e=>{const provider=e.currentTarget.value;run(()=>send("/settings",{ai_provider:provider},"PATCH"),"Text provider selected explicitly");}}><option value="" disabled>Loading...</option><option value="chatgpt">ChatGPT plan - direct connection</option><option value="codex">Codex - compatibility provider</option></select></label>
+ <p className="muted">Provider source: {data?.configuration?.source||"checking"}. Saved Settings takes precedence over .env; existing productions retain their own selection.</p><label>Text provider<select aria-label="Text provider" value={data?.provider||""} disabled={!data||busy||pending} onChange={e=>{const provider=e.currentTarget.value;run(()=>send("/settings",{ai_provider:provider},"PATCH"),"Text provider selected explicitly");}}><option value="" disabled>Loading...</option><option value="chatgpt">ChatGPT plan - direct connection</option><option value="codex">Codex - compatibility provider</option></select></label>
  <Badge status={data?.state||"CHECKING"}/>{status.error&&<p role="alert">{status.error.message}</p>}{data?.message&&<p role="alert">{data.message}</p>}
  <div className="button-row"><Button disabled={busy||pending} onClick={()=>connect()}>Continue with ChatGPT</Button><Button disabled={busy||status.isFetching} variant="outline" onClick={()=>void status.refetch()}><RefreshCw size={14}/> Refresh connection</Button>{pending&&<Button disabled={busy} variant="outline" onClick={()=>run(()=>send("/auth/chatgpt/cancel",{}),"Authorization cancelled; existing connections preserved")}>Cancel authorization</Button>}</div>
  <p role="status">{pending?"Waiting for authorization. Complete sign-in in your browser or cancel.":data?.login.message}</p>

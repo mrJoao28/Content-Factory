@@ -43,7 +43,7 @@ def enqueue(db, project):
     )
     if existing:
         return existing
-    from .providers import new_selection
+    from .providers import job_selection, new_selection
 
     previous = db.scalar(
         select(ProductionJob)
@@ -51,9 +51,7 @@ def enqueue(db, project):
         .order_by(ProductionJob.created_at.desc())
         .limit(1)
     )
-    selection = (
-        previous.checkpoint.get("_ai_selection", {"provider": "codex"}) if previous else new_selection(db)
-    )
+    selection = job_selection(db, previous)[0] if previous else new_selection(db)
     job = ProductionJob(
         project_id=project.id, revision=project.revision, checkpoint={"_ai_selection": selection}
     )
@@ -110,12 +108,23 @@ def checkpoint(job_id, owner, stage, key=None, value=None):
         project = db.get(VideoProject, job.project_id)
         if project.revision != job.revision:
             raise Cancelled("Project changed during production")
+        previous_stage = job.state
         if key:
             job.checkpoint = {**job.checkpoint, key: value}
         job.state = stage
         project.status = stage
         job.lease_until = utcnow() + timedelta(seconds=45)
-    event(job.project_id, stage, key or stage)
+    roles = {
+        "creative_director",
+        "script_writer",
+        "storyboard_planner",
+        "visual_director",
+        "animation_planner",
+        "quality_reviewer",
+        "publishing_assistant",
+    }
+    if previous_stage != stage or (key and not key.startswith("_") and key not in roles):
+        event(job.project_id, stage, key or stage)
 
 
 class Worker:
@@ -159,6 +168,7 @@ class Worker:
                 project = db.get(VideoProject, job.project_id)
                 if job.owner != self.owner:
                     return True
+                interrupted_stage = job.state
                 if isinstance(exc, Cancelled):
                     if job.state not in {"CANCELLED", "PAUSED"}:
                         job.state = "DRAFT" if self.stop.is_set() else "CANCELLED"
@@ -186,6 +196,24 @@ class Worker:
                     if isinstance(exc, (ConfigurationRequired, Cancelled, ValueError, TransientFailure))
                     else type(exc).__name__ + ": check local tool configuration"
                 )
+                selection = job.checkpoint.get("_ai_selection") or {}
+                job.checkpoint = {
+                    **job.checkpoint,
+                    "_failure": {
+                        "stage": interrupted_stage,
+                        "provider": selection.get("provider"),
+                        "code": getattr(
+                            exc,
+                            "code",
+                            "invalid_content"
+                            if isinstance(exc, ValueError)
+                            else "transient"
+                            if isinstance(exc, TransientFailure)
+                            else "configuration",
+                        ),
+                        "message": job.error,
+                    },
+                }
                 if project.revision == job.revision:
                     project.status = job.state
                 db.add(JobEvent(project_id=project.id, stage=job.state, level="error", message=job.error))

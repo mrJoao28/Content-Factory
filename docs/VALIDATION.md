@@ -1,5 +1,15 @@
 # Validacao e pendencias
 
+## Recuperacao de provider/job: 2026-10-26
+
+- Base 4730771; causa e dados sanitizados documentados em [PROVIDER_RECOVERY.md](PROVIDER_RECOVERY.md). Banco do proprietario consultado somente em leitura; nenhuma producao real foi retomada ou recriada pelo agente.
+- `python -m pytest -q --basetemp=data/provider-recovery-final`: **114 passaram**, sem skips, em 115.21s. Apos limitar a busca de etapa ao intervalo temporal do job, os testes de historico e pipeline foram repetidos: **3 passaram**, incluindo os dois renders reais e recuperacao apos persistir o artefato.
+- Ruff passou; TypeScript strict passou; Vitest **6 passaram**; build de producao Next.js passou.
+- Playwright inclui recuperacao de FAILED com Codex para ChatGPT usando as rotas reais, consentimento explicito, vault DPAPI de teste e checkpoint preservado. API Uvicorn e frontend Next.js sao iniciados em portas isoladas; worker desabilitado para o teste de interface. As provas de pipeline Python executam worker, SSE externo controlado, schemas reais, audio conhecido e MP4 local nos dois canais, sem chamadas Codex.
+- Execucao final Playwright: **6 passaram em 43.6s**, incluindo recuperacao pela interface sem simular as rotas verificadas. Os timestamps da fixture respeitam o intervalo de vida do job.
+- Login/inferencia reais continuam pendentes do proprietario. O vault da conta real respondeu STORAGE_UNAVAILABLE no ambiente do agente; isso nao comprova erro de login no processo do usuario. FFmpeg e FFprobe disponiveis; Piper/voz nao configurados; assets essenciais dependem do storyboard ainda ausente.
+- A criacao de fix/provider-selection-and-job-recovery foi tentada e bloqueada por somente leitura de .git. Nenhum commit, push ou PR desta correcao foi criado. As alteracoes preexistentes em egg-info foram preservadas.
+
 ## Login ChatGPT direto: validacao de 2026-10-26
 
 - Pytest: **104 passaram** (`python -m pytest --basetemp=data/test-chatgpt-final -q`). Inclui registro OAuth, JWT/JWKS, PKCE, callback/replay/cancelamento, scopes efetivos, vault DPAPI, refresh coordenado entre processos, SSE fragmentado, erros HTTP, checkpoints e retomada dos dois canais com MP4 real. Somente servicos externos foram substituidos nos testes.

@@ -20,7 +20,7 @@ def diagnose():
         except Exception:
             result[name] = {"state": "UNAVAILABLE", "instructions": "Install FFmpeg including FFprobe"}
     from .chatgpt import accounts
-    from .providers import configured_provider
+    from .providers import configured_provider, provider_configuration
 
     provider = configured_provider()
     connection = accounts.status()
@@ -50,6 +50,8 @@ def diagnose():
             "state": result["codex"]["state"],
             "note": "Codex compatibility provider selected; login status is not an inference test.",
         }
+    result["text_provider"]["source"] = provider_configuration()["source"]
+    result["text_provider"]["precedence"] = "Saved Settings overrides environment; existing jobs retain their own selection."
     result["codex_sdk"] = {
         "state": "READY" if importlib.util.find_spec("openai_codex") else "UNAVAILABLE",
         "note": "Module detection only; actual model access requires a completed turn",

@@ -35,4 +35,6 @@ def test_doctor_reports_direct_provider_readiness(client, monkeypatch):
     assert client.get("/doctor").json()["text_provider"] == {
         "state": "STORAGE_UNAVAILABLE",
         "note": "Configure secure OS storage.",
+        "source": "environment",
+        "precedence": "Saved Settings overrides environment; existing jobs retain their own selection.",
     }

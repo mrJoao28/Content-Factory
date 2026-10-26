@@ -10,6 +10,7 @@ keyring<27,>=25
 imageio-ffmpeg<1,>=0.6
 PyJWT[crypto]<3,>=2.10
 filelock<4,>=3.18
+tzdata>=2025.1
 
 [codex]
 openai-codex

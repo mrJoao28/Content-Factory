@@ -13,6 +13,14 @@ def serialize(row):
     values = {column.key: getattr(row, column.key) for column in inspect(type(row)).column_attrs}
     if "metadata_json" in values:
         values["metadata"] = values.pop("metadata_json")
+    if isinstance(row, ProductionJob):
+        from sqlalchemy.orm import object_session
+
+        from .providers import job_diagnostics
+
+        session = object_session(row)
+        if session:
+            values["diagnostic"] = job_diagnostics(session, row)
     values.pop("idea_hash", None)
     return jsonable_encoder(values)
 
