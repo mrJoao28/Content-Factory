@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     output_dir: Path = ROOT / "output"
     assets_dir: Path = ROOT / "assets"
     default_timezone: str = "America/Manaus"
+    ai_provider: Literal["chatgpt", "codex"] | None = None
+    chatgpt_login_timeout_seconds: int = Field(default=300, ge=1, le=600)
     codex_auth_mode: Literal["chatgpt"] = "chatgpt"
     codex_provider: Literal["auto", "cli", "sdk"] = "auto"
     codex_path: str = "codex"

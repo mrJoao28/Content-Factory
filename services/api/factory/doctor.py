@@ -19,7 +19,13 @@ def diagnose():
             result[name] = {"state": "READY", "path": str(binary)}
         except Exception:
             result[name] = {"state": "UNAVAILABLE", "instructions": "Install FFmpeg including FFprobe"}
-    result["codex"] = auth_status()
+    from .chatgpt import accounts
+    from .providers import configured_provider
+    provider = configured_provider()
+    result["text_provider"] = {"state": "READY", "note": provider + " (explicit selection; not an inference test)"}
+    connection = accounts.status()
+    result["chatgpt"] = {"state": connection["state"], "note": connection.get("message", "Login and inference validation are separate checks")}
+    result["codex"] = auth_status() if provider == "codex" else {"state": "OPTIONAL", "note": "Not used by the direct ChatGPT provider"}
     result["codex_sdk"] = {
         "state": "READY" if importlib.util.find_spec("openai_codex") else "UNAVAILABLE",
         "note": "Module detection only; actual model access requires a completed turn",

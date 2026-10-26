@@ -530,3 +530,15 @@ Para cada variavel abaixo, o exemplo nao contem credenciais reais.
 | Validacao | Arquivo acima do limite retorna HTTP 413. |
 | Erros comuns | Arquivos grandes demais sao removidos apos rejeicao. |
 | Seguranca | Nao versionar .env, credenciais, dados nem logs sensiveis. Nao usar valores recebidos de roteiros como caminhos ou comandos. |
+
+
+## Login ChatGPT proprio (provider direto)
+
+| Nome | Servico e finalidade | Obrigatoria/padrao | Exemplo e obtencao | Validacao e erros | Seguranca |
+|---|---|---|---|---|---|
+| AI_PROVIDER | Content Factory: provider textual padrao | Opcional; chatgpt em instalacoes novas, compatibilidade legada preservada | AI_PROVIDER=chatgpt; escolha chatgpt ou codex, sem cadastro externo | Settings mostra a escolha; valores diferentes sao recusados. Preferencia salva na UI tem precedencia | Nao e segredo; nao muda conta nem cobranca automaticamente |
+| CHATGPT_LOGIN_TIMEOUT_SECONDS | Content Factory: prazo da autorizacao | Opcional; 300 | CHATGPT_LOGIN_TIMEOUT_SECONDS=300; escolha local entre 1 e 600 | Timeout encerra listener; retry usa state/nonce/PKCE novos. Valores fora do intervalo sao recusados | Nao e segredo |
+
+URL oficial e passo a passo: https://developers.openai.com/siwc/token-sharing-open-source/sign-in. Nao obtenha ou preencha client_id/secret/tokens manualmente: o navegador autoriza a identidade Content Factory e o backend guarda o registro emitido no vault. O guia [CHATGPT_DIRECT.md](CHATGPT_DIRECT.md) descreve permissao de plano, callback, modelos e reconexao.
+
+CODEX_TIMEOUT_SECONDS e CODEX_MAX_CONCURRENT_JOBS tambem limitam o provider textual direto. O Codex CLI/SDK e opcional nesse modo. Mantenha as configuracoes Google/YouTube/TikTok existentes; a mudanca nao altera seus segredos ou permissoes.

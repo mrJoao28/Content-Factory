@@ -19,7 +19,15 @@ ACTIVE = {
     "RENDERING",
     "TECHNICAL_VALIDATION",
 }
-WAITING = {"WAITING_FOR_AUTH", "WAITING_FOR_ASSETS", "FAILED", "PAUSED"}
+WAITING = {
+    "WAITING_FOR_AUTH",
+    "WAITING_FOR_ASSETS",
+    "WAITING_FOR_LIMIT",
+    "WAITING_FOR_MODEL",
+    "WAITING_FOR_PLATFORM_APPROVAL",
+    "FAILED",
+    "PAUSED",
+}
 
 
 def event(project_id, stage, message, level="info"):
@@ -35,7 +43,20 @@ def enqueue(db, project):
     )
     if existing:
         return existing
-    job = ProductionJob(project_id=project.id, revision=project.revision)
+    from .providers import new_selection
+
+    previous = db.scalar(
+        select(ProductionJob)
+        .where(ProductionJob.project_id == project.id)
+        .order_by(ProductionJob.created_at.desc())
+        .limit(1)
+    )
+    selection = (
+        previous.checkpoint.get("_ai_selection", {"provider": "codex"}) if previous else new_selection(db)
+    )
+    job = ProductionJob(
+        project_id=project.id, revision=project.revision, checkpoint={"_ai_selection": selection}
+    )
     db.add(job)
     db.flush()
     return job
@@ -141,14 +162,22 @@ class Worker:
                 if isinstance(exc, Cancelled):
                     if job.state not in {"CANCELLED", "PAUSED"}:
                         job.state = "DRAFT" if self.stop.is_set() else "CANCELLED"
+                elif hasattr(exc, "state") and isinstance(exc, ConfigurationRequired):
+                    job.state = exc.state
                 elif isinstance(exc, ConfigurationRequired):
                     job.state = (
-                        "WAITING_FOR_AUTH" if "authentication" in str(exc).lower() else "WAITING_FOR_ASSETS"
+                        "WAITING_FOR_AUTH"
+                        if any(
+                            word in str(exc).lower() for word in ("authentication", "credential", "storage")
+                        )
+                        else "WAITING_FOR_ASSETS"
                     )
                 elif isinstance(exc, TransientFailure) and job.attempts < 3:
                     job.attempts += 1
                     job.state = "DRAFT"
-                    job.available_at = utcnow() + timedelta(seconds=min(300, 5 * 2**job.attempts))
+                    job.available_at = utcnow() + timedelta(
+                        seconds=max(min(300, 5 * 2**job.attempts), getattr(exc, "retry_after", 0))
+                    )
                 else:
                     job.state = "FAILED"
                 # Exceptions contain only controlled messages; never response bodies or tokens.

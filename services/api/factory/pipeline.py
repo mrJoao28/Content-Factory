@@ -3,7 +3,6 @@ import time
 from sqlalchemy import delete, select
 
 from .audio import Piper, mix_tracks
-from .codex import CodexProvider
 from .config import settings
 from .db import Session
 from .models import (
@@ -17,6 +16,7 @@ from .models import (
     VideoProject,
     VideoScene,
 )
+from .providers import get_provider
 from .queue import checkpoint, event
 from .render import probe, render, validate_video
 from .schemas import AgentResult, AudioMix, Board, Metadata, Script
@@ -50,7 +50,14 @@ def produce(job_id, owner, cancel=lambda: False):
         ]
         context["visual_medium"] = "2.5D geometric or imported transparent sprites; not physical 3D"
         saved = dict(job.checkpoint)
-    provider = CodexProvider()
+    selection = saved.get("_ai_selection", {"provider": "codex"})
+    if selection["provider"] == "chatgpt" and (not selection.get("account_id") or not selection.get("model")):
+        from .chatgpt import accounts
+
+        selection = accounts.binding()
+        checkpoint(job_id, owner, "SCRIPTING", "_ai_selection", selection)
+        saved["_ai_selection"] = selection
+    provider = get_provider(selection)
 
     def agent(role, response_type, stage):
         key = role.lower().replace(" ", "_")
@@ -64,8 +71,9 @@ def produce(job_id, owner, cancel=lambda: False):
                 cancel=cancel,
                 emit=lambda kind: event(project_id, stage, role + ": " + kind),
             )
-            saved[key] = result.model_dump(mode="json")
-            checkpoint(job_id, owner, stage, key, saved[key])
+            with provider.persistence_guard():
+                saved[key] = result.model_dump(mode="json")
+                checkpoint(job_id, owner, stage, key, saved[key])
         context[key] = saved[key]
         return response_type.model_validate(saved[key])
 

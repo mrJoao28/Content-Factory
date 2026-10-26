@@ -8,6 +8,8 @@ pillow<13,>=11
 httpx<1,>=0.28
 keyring<27,>=25
 imageio-ffmpeg<1,>=0.6
+PyJWT[crypto]<3,>=2.10
+filelock<4,>=3.18
 
 [codex]
 openai-codex

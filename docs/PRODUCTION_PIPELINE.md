@@ -19,3 +19,9 @@ Pause/cancel sao persistidos e observados entre etapas e por frame. Um trabalho 
 Rejeicao humana mantem HUMAN_REVIEW. Editar cria revisao, descarta aprovacao e exige novo render. Antes de qualquer entrega o hash do arquivo real e comparado com o aprovado. Planejar nao publica; confirmar upload e uma acao separada.
 
 Templates infantis: walk, jump, observe, expression, floating, parallax, magic, sparkle. Templates de engenharia: exploded, layers, arrows, fluid, gears, highlight, rotation, comparison, sequence. Sao diagramas/animacao 2.5D. O template Blender opcional e um script confiavel do repositorio; scripts arbitrarios nao sao aceitos.
+
+## Conexao textual e retomada
+
+Cada nova producao registra provider, conexao e modelo selecionados, sem tokens. A interface exibe essa selecao; alterar o padrao em Settings nao troca silenciosamente a conta de um job existente. Jobs antigos continuam usando Codex por compatibilidade. O usuario pode aplicar explicitamente a selecao atual a uma tarefa aguardando, mantendo checkpoints concluidos.
+
+Falta ou expiracao de autorizacao usa WAITING_FOR_AUTH; permissao insuficiente usa WAITING_FOR_PLATFORM_APPROVAL; limite do plano usa WAITING_FOR_LIMIT; modelo indisponivel usa WAITING_FOR_MODEL. Esses estados aguardam intervencao e Resume, sem repeticao infinita. Erros transitorios respeitam tentativas limitadas e Retry-After. Reconectar permite retomar a etapa pendente sem repetir os resultados ja persistidos. Cancelar ou trocar a conexao interrompe geracoes daquela sessao. A revisao humana e o hash aprovado continuam obrigatorios para entrega.

@@ -1,6 +1,18 @@
 # Validacao e pendencias
 
-## Resultados executados neste workspace
+## Login ChatGPT direto: validacao de 2026-10-26
+
+- Pytest: **104 passaram** (`python -m pytest --basetemp=data/test-chatgpt-final -q`). Inclui registro OAuth, JWT/JWKS, PKCE, callback/replay/cancelamento, scopes efetivos, vault DPAPI, refresh coordenado entre processos, SSE fragmentado, erros HTTP, checkpoints e retomada dos dois canais com MP4 real. Somente servicos externos foram substituidos nos testes.
+- Ruff passou; TypeScript strict passou; Vitest **6 passaram**; Playwright **5 passaram**; build de producao Next.js passou. Sintaxe PowerShell validada.
+- Instalacao limpa do frontend em pasta isolada com o lockfile atual: **npm ci instalou 94 pacotes**, executando scripts normalmente.
+- API Uvicorn iniciou com HTTP real, sem chave de API, CLI Codex indisponivel e importacao do SDK desabilitada no processo de teste. Dashboard/diagnostico responderam e a fila sem autorizacao entrou em WAITING_FOR_AUTH. Os testes de navegador iniciaram API e frontend reais em portas isoladas.
+- Login com conta humana, elegibilidade do plano, catalogo real e inferencia OpenAI real **nao foram executados**. Para validar: iniciar a aplicacao, selecionar ChatGPT direto em Settings, autorizar, escolher um modelo e confirmar o teste que consome o limite do plano.
+- Referencia comportamental My-Code-Agent: commit `9f2212aebff6baecc7edd54be81d04e4d41459a4`. Implementacao Python independente baseada na documentacao oficial; nenhum codigo TypeScript foi copiado. Guia: [CHATGPT_DIRECT.md](CHATGPT_DIRECT.md).
+- Base Content Factory: `1e455b8d57b7d1738de10281d769e9235e070233`. Alteracoes locais preservadas. A criacao da branch foi bloqueada pela permissao de somente leitura de `.git`; nenhum commit, push ou PR foi criado nesta entrega.
+
+Os registros abaixo descrevem validacoes anteriores e limitacoes das demais integracoes; as contagens atuais sao as desta secao.
+
+## Resultados anteriores executados neste workspace
 
 - Python 3.14.2; Node.js 26.8.1; Next.js 16.4.1; Codex CLI 0.164.0.
 - Pytest: **63 passaram, nenhum ignorado**. Inclui SQLite WAL/foreign keys, CRUD, duplicacao, series/personagens/assets, fila/lease/recovery/retry/cancelamento, schemas, seguranca local, provider JSONL, vault DPAPI, OAuth/refresh, Drive, YouTube, TikTok Direct Post, calendario, mixer e render real.
@@ -23,7 +35,7 @@ Cada pasta inclui thumbnail, storyboard e validation.json com hash, codecs, volu
 
 ## Contas e ferramentas ainda pendentes
 
-1. O CLI informa AUTH_REQUIRED. Execute codex login no seu usuario. Geracao real de roteiro pelo seu ChatGPT ainda nao foi validada.
+1. A conexao ChatGPT direta requer autorizacao humana em Settings e teste explicito de inferencia. O provider Codex continua opcional e usa sua autenticacao oficial propria; nao e requisito do fluxo direto.
 2. SDK Python oficial 0.163.0 instalado. A consulta real de conta funcionou com o runtime incluido no SDK; nao havia sessao autenticada disponivel neste processo. Login usa o runtime correspondente do SDK; inferencia usa o CLI oficial quando o gate de isolamento exige. Sessoes sao efemeras; checkpoints persistem todos os resultados. Reuso de threads persistentes e uma extensao pendente.
 3. Piper e voz inglesa nao estao configurados. O caminho de narracao importada foi testado com arquivos reais; Piper real requer instalar modelo e validar licenca/qualidade da voz.
 4. Google/YouTube/TikTok estao sem credenciais/consentimento. Integracoes foram testadas com HTTP mocks, incluindo scopes, estados e payloads. Nao foram validadas em contas de producao.
@@ -35,7 +47,7 @@ Cada pasta inclui thumbnail, storyboard e validation.json com hash, codecs, volu
 
 ## Git
 
-A main ja possui o commit inicial fb23d33, criado fora desta sessao. As correcoes desta sessao permanecem no working tree. A politica do ambiente permite somente leitura de .git; nenhum novo commit, branch, merge ou push foi realizado.
+A revisao base desta entrega e 1e455b8d57b7d1738de10281d769e9235e070233, criada fora desta sessao. As correcoes desta sessao permanecem no working tree. A politica do ambiente permite somente leitura de .git; nenhum novo commit, branch, merge ou push foi realizado.
 
 O projeto nao e declarado tecnicamente concluido conforme todos os criterios do prompt: autenticacao de conta, voz e validacao externa continuam pendentes. O codigo local, UI, banco, fila e producao de midia possuem evidencias executadas acima.
 

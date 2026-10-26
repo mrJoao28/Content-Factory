@@ -2,7 +2,7 @@
 
 1. Instale Python 3.11+ de https://www.python.org/downloads/windows/ e Node.js LTS de https://nodejs.org/en/download. Habilite PATH. Use Python x64 convencional se o alias Microsoft Store retornar acesso negado.
 2. Instale FFmpeg com FFprobe: https://ffmpeg.org/download.html. Builds Windows sao listados no site oficial. Extraia e coloque `bin` no PATH, ou defina caminhos absolutos no .env. Valide `ffmpeg -version` e `ffprobe -version`. O FFmpeg reduzido do Playwright nao fornece os codecs/audio exigidos.
-3. Instale o CLI oficial: `npm install -g @openai/codex`. Execute `codex login` e `codex login status` no usuario que rodara o backend. Nao transfira tokens para a aplicacao.
+3. Opcional, somente para o provider Codex de compatibilidade: instale o CLI oficial: `npm install -g @openai/codex`. Execute `codex login` e `codex login status` no usuario que rodara o backend. Nao transfira tokens para a aplicacao.
 4. Abra PowerShell na raiz do projeto. Se a politica de scripts impedir execucao, use a politica permitida pela sua organizacao; os comandos manuais abaixo dispensam scripts.
 5. Execute `scripts/setup.ps1`. Ele cria venv, instala dependencias, copia .env.example apenas se .env nao existir, prepara diretorios, executa migracao e doctor.
 6. Configure uma voz Piper ou importe audio WAV/MP3. Para Piper, veja ENV_GUIDE. Blender e opcional: https://www.blender.org/download/.
@@ -13,7 +13,8 @@
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e '.[dev]'
-.\.venv\Scripts\python.exe -m pip install openai-codex
+# Opcional, apenas para o provider Codex:
+.\scripts\setup.ps1 -InstallCodexSdk
 npm.cmd ci --prefix apps/web
 Copy-Item .env.example .env # apenas se ainda nao existe
 $env:PYTHONPATH = "$PWD/services/api"
@@ -45,3 +46,5 @@ O setup precisa baixar pacotes se nao estiverem instalados. `WinError 10013` ind
 `-StopRunning` inspects command lines and stops only this repository's Python API and Next.js processes. It does not stop all Node/Python programs. Run it in the same Windows account that started the app. Alternatively, use `.\scripts\stop.ps1` separately. If process inspection or termination is denied, close the original development terminals with Ctrl+C and retry. No administrator access is required for processes owned by your account.
 
 Setup checks the native SWC module for a lock before installing dependencies. Dev checks both ports and the installed Next entrypoint before starting anything, starts Next directly through Node, waits for successful HTTP responses, and displays startup logs on failure. Cleanup errors do not replace the startup error. The READY message is displayed only after API and frontend answer successfully.
+
+Para o login recomendado sem CLI/SDK, siga [CHATGPT_DIRECT.md](CHATGPT_DIRECT.md). O setup padrao nao instala Codex e o doctor nao executa seu CLI quando ChatGPT direto esta selecionado.

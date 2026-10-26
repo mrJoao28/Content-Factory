@@ -1,3 +1,7 @@
+# Autenticacao textual: ChatGPT direto e Codex opcional
+
+O fluxo recomendado para novas instalacoes e o login proprio da Content Factory, sem CLI/SDK nem API key. Veja [CHATGPT_DIRECT.md](CHATGPT_DIRECT.md). O restante deste guia descreve somente o provider Codex de compatibilidade, selecionado explicitamente em Settings.
+
 # Autenticacao ChatGPT / Codex
 
 Instale `npm install -g @openai/codex`, execute `codex login` e depois `codex login status`. O botao Connect ChatGPT inicia o login pelo SDK oficial e mostra um link para abrir no navegador. O CLI verifica a sessao salva. Login por dispositivo (`codex login --device-auth`) depende da disponibilidade da conta/organizacao.

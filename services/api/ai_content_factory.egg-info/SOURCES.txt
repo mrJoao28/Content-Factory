@@ -13,6 +13,13 @@ services/api/ai_content_factory.egg-info/top_level.txt
 services/api/factory/__init__.py
 services/api/factory/api_helpers.py
 services/api/factory/audio.py
+services/api/factory/chatgpt.py
+services/api/factory/chatgpt_accounts.py
+services/api/factory/chatgpt_auth.py
+services/api/factory/chatgpt_http.py
+services/api/factory/chatgpt_identity.py
+services/api/factory/chatgpt_provider.py
+services/api/factory/chatgpt_store.py
 services/api/factory/codex.py
 services/api/factory/codex_auth.py
 services/api/factory/codex_auth_bridge.py
@@ -23,9 +30,11 @@ services/api/factory/integrations.py
 services/api/factory/main.py
 services/api/factory/models.py
 services/api/factory/pipeline.py
+services/api/factory/providers.py
 services/api/factory/publishing.py
 services/api/factory/queue.py
 services/api/factory/render.py
+services/api/factory/routes_chatgpt.py
 services/api/factory/routes_library.py
 services/api/factory/routes_projects.py
 services/api/factory/routes_system.py
@@ -33,9 +42,11 @@ services/api/factory/schemas.py
 services/api/factory/sdk_bridge.py
 services/api/factory/security.py
 services/api/factory/templates.py
+services/api/factory/text_roles.py
 services/api/migrations/env.py
 services/api/migrations/versions/0001_initial.py
 tests/test_api.py
+tests/test_chatgpt_direct.py
 tests/test_codex_audio.py
 tests/test_codex_login.py
 tests/test_integrations.py

@@ -34,8 +34,41 @@ test("review does not enable approval without a real render",async({page})=>{
 
 test("settings exposes real Codex login status and device-code fallback",async({page})=>{
  await page.goto("/settings");
- await expect(page.getByRole("heading",{name:"Connect ChatGPT",exact:true})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Codex compatibility login",exact:true})).toBeVisible();
  await expect(page.getByRole("button",{name:"Use device code",exact:true})).toBeVisible();
  await expect(page.getByRole("button",{name:"Verify login",exact:true})).toBeVisible();
  await expect(page.getByText("codex login --device-auth",{exact:true})).toBeVisible();
+});
+
+
+test("direct ChatGPT authorization UI cancels, recovers and requests explicit plan test consent",async({page})=>{
+ let login={state:"IDLE",url:undefined as string|undefined,message:""};
+ let model:string|null=null;let verified=false;let error=false;let connected=false;
+ const account={id:"fixture-account",label:"Fixture account / workspace",connected:true,active:true,models:[{slug:"fixture-model",display_name:"Account model"}]};
+ await page.route("**/auth/chatgpt",async route=>{
+  if(error){await route.fulfill({status:503,json:{detail:"ChatGPT temporarily unavailable. Retry later."}});return;}
+  await route.fulfill({json:{state:connected?"CONNECTED":"DISCONNECTED",provider:"chatgpt",active_id:connected?account.id:null,accounts:connected?[{...account,model,inference_verified:verified}]:[],login}});
+ });
+ await page.route("**/auth/chatgpt/connect",async route=>{login={state:"WAITING",url:"https://auth.openai.com/api/accounts/authorize?state=fixture",message:""};await route.fulfill({json:login});});
+ await page.route("**/auth/chatgpt/cancel",async route=>{login={state:"CANCELLED",url:undefined,message:"Authorization cancelled. Existing connections were preserved."};await route.fulfill({json:login});});
+ await page.route("**/auth/chatgpt/accounts/*/model",async route=>{model=route.request().postDataJSON().model;await route.fulfill({json:{}});});
+ await page.route("**/auth/chatgpt/test",async route=>{expect(route.request().postDataJSON()).toEqual({confirm_plan_usage:true});verified=true;await route.fulfill({json:{state:"VERIFIED",model:"fixture-model"}});});
+ await page.goto("/settings");
+ await page.getByRole("button",{name:"Continue with ChatGPT",exact:true}).click();
+ await expect(page.getByRole("link",{name:"Open official authorization manually"})).toBeVisible();
+ await page.getByRole("button",{name:"Cancel authorization",exact:true}).click();
+ await expect(page.getByText("Authorization cancelled. Existing connections were preserved.",{exact:true})).toBeVisible();
+ await expect(page.getByRole("link",{name:"Open official authorization manually"})).toHaveCount(0);
+ error=true;await page.getByRole("button",{name:"Refresh connection",exact:true}).click();
+ await expect(page.getByRole("alert").filter({hasText:"temporarily unavailable"})).toBeVisible();
+ error=false;connected=true;login={state:"COMPLETE",url:undefined,message:"Authorized; inference not verified."};
+ await page.getByRole("button",{name:"Refresh connection",exact:true}).click();
+ await page.getByRole("combobox",{name:"ChatGPT model",exact:true}).selectOption("fixture-model");
+ const testButton=page.getByRole("button",{name:"Test text generation",exact:true});
+ await expect(testButton).toBeDisabled();
+ await page.getByRole("checkbox",{name:/testing this connection consumes/}).check();
+ await testButton.click();
+ await expect(page.getByText("Inference VERIFIED for fixture-model",{exact:true})).toBeVisible();
+ const storage=await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage}));
+ expect(storage).not.toContain("access_token");expect(storage).not.toContain("refresh_token");
 });

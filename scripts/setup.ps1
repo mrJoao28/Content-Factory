@@ -1,4 +1,4 @@
-param([switch]$SkipCodexSdk, [switch]$StopRunning)
+param([switch]$SkipCodexSdk, [switch]$StopRunning, [switch]$InstallCodexSdk)
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 . (Join-Path $PSScriptRoot 'runtime.ps1')
@@ -26,7 +26,7 @@ if ($LASTEXITCODE) {
     if ($LASTEXITCODE) { throw 'Migration dependencies are unavailable. See docs/TROUBLESHOOTING.md.' }
 }
 
-if (-not $SkipCodexSdk) {
+if ($InstallCodexSdk -and -not $SkipCodexSdk) {
     & $pythonPath -m pip install openai-codex
     if ($LASTEXITCODE) { Write-Warning 'Official SDK unavailable. The official CLI adapter remains usable.' }
 }
@@ -42,4 +42,4 @@ if ($LASTEXITCODE) { throw 'Database migration failed' }
 & $pythonPath -c "from factory.db import seed; seed()"
 & $pythonPath -m factory.doctor
 Write-Host 'Setup complete. Activate missing dependencies shown by doctor.'
-Write-Host 'Run: codex login; .\scripts\dev.ps1'
+Write-Host 'Run: .\scripts\dev.ps1 then connect ChatGPT in Settings. Codex CLI/SDK is optional; use -InstallCodexSdk only for the compatibility provider.'

@@ -21,6 +21,7 @@ from .models import (
     UserSettings,
     VideoProject,
 )
+from .providers import configured_provider
 from .queue import ACTIVE
 
 router = APIRouter()
@@ -202,6 +203,7 @@ def user_settings():
         row = db.get(UserSettings, "preferences")
         return {
             "timezone": settings.default_timezone,
+            "ai_provider": configured_provider(db),
             "require_human_approval": settings.require_human_approval,
             "auto_publish": False,
             "render_concurrency": 1,
@@ -212,8 +214,12 @@ def user_settings():
 
 @router.patch("/settings")
 def update_settings(body: dict):
-    if set(body) - {"timezone", "editorial_goals", "drive_folder_id"}:
+    if set(body) - {"timezone", "editorial_goals", "drive_folder_id", "ai_provider"}:
         raise ValueError("Unsupported setting; edit local .env for system configuration")
+    if "ai_provider" in body and (
+        not isinstance(body["ai_provider"], str) or body["ai_provider"] not in {"chatgpt", "codex"}
+    ):
+        raise ValueError("Unknown text provider")
     if "timezone" in body:
         from zoneinfo import ZoneInfo
 

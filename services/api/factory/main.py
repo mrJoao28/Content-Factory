@@ -30,6 +30,8 @@ async def lifespan(app):
     from .codex_auth import login_manager
 
     login_manager.cancel()
+    from .chatgpt import close
+    close()
 
 
 app = FastAPI(title="AI Content Factory", version="0.1.0", lifespan=lifespan)
@@ -88,3 +90,7 @@ from . import routes_library, routes_projects, routes_system  # noqa: E402
 app.include_router(routes_projects.router)
 app.include_router(routes_library.router)
 app.include_router(routes_system.router)
+
+from . import routes_chatgpt  # noqa: E402
+
+app.include_router(routes_chatgpt.router)

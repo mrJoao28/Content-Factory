@@ -56,7 +56,7 @@ class Vault:
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _path(self, name):
-        if name not in {"google", "youtube", "tiktok"}:
+        if name not in {"google", "youtube", "tiktok", "chatgpt"}:
             raise ValueError("Unknown credential slot")
         return self.root / (name + ".bin")
 
@@ -83,9 +83,14 @@ class Vault:
         serialized = json.dumps(value)
         if os.name == "nt":
             path = self._path(name)
-            temp = path.with_suffix(".tmp")
-            temp.write_bytes(self._dpapi(serialized.encode(), True))
-            temp.replace(path)
+            from uuid import uuid4
+
+            temp = path.with_name(path.name + "." + uuid4().hex + ".tmp")
+            try:
+                temp.write_bytes(self._dpapi(serialized.encode(), True))
+                temp.replace(path)
+            finally:
+                temp.unlink(missing_ok=True)
         else:
             import keyring
 

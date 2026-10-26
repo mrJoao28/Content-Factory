@@ -4,7 +4,7 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => ({}));
     const detail = typeof body === "object" && body !== null && "detail" in body ? body.detail : response.statusText;
-    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    throw new Error(typeof detail === "string" ? detail : typeof detail === "object" && detail !== null && "message" in detail && typeof detail.message === "string" ? detail.message : JSON.stringify(detail));
   }
   return response.json() as Promise<T>;
 }
