@@ -4,6 +4,7 @@ Execute `scripts/doctor.ps1` ou abra Settings > Run checks. READY de uma ferrame
 
 | Sintoma | Acao |
 |---|---|
+| Unsupported platform ao clicar Continue with ChatGPT | Atualize o codigo e reinicie a API. Versoes anteriores registravam /auth/{platform}/connect antes de /auth/chatgpt/connect; o pedido era enviado ao OAuth de Google/TikTok antes de iniciar o login ChatGPT. Nao e erro de senha, plano ou chave de API. |
 | AUTH_REQUIRED / WAITING_FOR_AUTH | Execute codex login no mesmo usuario/processo, depois Verify login e Resume. A sessao do app Codex de outro usuario sandbox nao e automaticamente compartilhada. |
 | WinError 10013 no pip/npm | Ambiente bloqueou acesso de rede. Execute setup em terminal autorizado com conectividade; nao invente credenciais nem desabilite protecoes. |
 | Python Store acesso negado | Instale Python x64 convencional; confira Get-Command python e python --version. |
@@ -19,6 +20,7 @@ Execute `scripts/doctor.ps1` ou abra Settings > Run checks. READY de uma ferrame
 | NEEDS_RECONCILIATION | Upload teve resposta ambigua. Consulte status remoto antes de outra tentativa. Nao apague o registro para forcar duplicacao. |
 | Nao consigo editar | Pause e aguarde o worker liberar o lease. Renovacao ocorre a cada 10s; lease expira em 45s. |
 | Banco bloqueado | Use disco local e um processo API; WAL/busy_timeout ja estao ativos. Evite sync de nuvem no arquivo SQLite aberto. |
+| America/Manaus ou outro fuso nao encontrado no Windows | Rode setup para instalar a dependencia tzdata. O calendario precisa da base IANA, que normalmente nao acompanha o Windows. |
 | Browser nao inicia nos testes | Execute npx playwright install chromium no diretorio apps/web e confira politicas locais. |
 | .git/index.lock: Permission denied | Sandbox atual protege .git. Execute commits como proprietario fora dessa restricao; nenhum commit foi fabricado. |
 | Ruff/Alembic indisponivel | Instale .[dev] com conectividade. Check de sintaxe Python nao substitui lint nem migracao Alembic. |

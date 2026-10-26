@@ -13,6 +13,10 @@ Execute `scripts/setup.ps1` e `scripts/dev.ps1`; abra http://127.0.0.1:3000/sett
 
 Roteiro, storyboard, revisoes e metadados usam o mesmo provider. O compositor 2.5D, Piper/audio importado, arquivos, revisao por hash e publicacao continuam independentes. Esse login nao e acesso programatico a geracao de imagens ou videos.
 
+Se o botao exibir **Unsupported platform**, atualize a aplicacao e reinicie o backend: esse erro vinha de um conflito de ordem entre rotas locais, antes de qualquer pedido de autorizacao a OpenAI. A rota especifica ChatGPT agora e registrada antes da rota generica das outras plataformas, com teste pelo aplicativo FastAPI montado e pelo callback loopback real. As chamadas externas nesses testes usam somente fixtures, sem consumir o plano.
+
+O System doctor agora acompanha a prontidao do provider escolhido: DISCONNECTED exige login, WAITING_FOR_MODEL exige escolher modelo, STORAGE_UNAVAILABLE exige configurar o vault. READY confirma conexao/modelo configurados; o teste de inferencia continua separado. Se um modelo selecionado desaparecer do catalogo, sua verificacao anterior e invalidada.
+
 ## Contas, reconexao e retomada
 
 Contas salvas possuem rotulos distintos mesmo com email igual. Use account troca explicitamente a conexao; Reconnect reutiliza seu registro e verifica novamente sua identidade. Uma tentativa incompleta nao substitui a conta ativa. Cancel authorization encerra o listener e preserva a conexao anterior.
