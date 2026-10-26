@@ -182,6 +182,52 @@ def test_dynamic_registration_real_callback_and_safe_status(connection):
     assert "id_token_hint" not in query
 
 
+def test_login_through_real_api_routes_reaches_chatgpt_not_platform_oauth(connection, client, monkeypatch):
+    from factory import routes_chatgpt
+    from factory.chatgpt_http import AUTHORIZE
+
+    remote, accounts, login = connection
+    monkeypatch.setattr(routes_chatgpt, "accounts", accounts)
+    monkeypatch.setattr(routes_chatgpt, "login", login)
+    monkeypatch.setattr("factory.chatgpt_auth.webbrowser.open", lambda *args, **kwargs: False)
+    # Exercise the mounted application, not a route stub: platform OAuth has an overlapping path.
+    result = client.post("/auth/chatgpt/connect", json={})
+    assert result.status_code == 200, result.text
+    assert result.json()["state"] == "WAITING"
+    query = parse_qs(urlsplit(result.json()["url"]).query)
+    assert result.json()["url"].startswith(AUTHORIZE + "?")
+    assert query["agent_name_hint"] == ["Content Factory"]
+    assert query["client_id"] == ["dynamic_agent_client"]
+    remote.nonce = query["nonce"][0]
+    response = httpx.get(
+        login._attempt["redirect"],
+        params={"state": query["state"][0], "code": "fixture-code", "client_id": "oaiapp_factory_test"},
+        trust_env=False,
+    )
+    assert response.status_code == 200
+    status = client.get("/auth/chatgpt").json()
+    assert status["state"] == "CONNECTED"
+    assert status["login"]["state"] == "COMPLETE"
+    account_id = status["active_id"]
+    assert client.post(f"/auth/chatgpt/accounts/{account_id}/models", json={}).status_code == 200
+    assert client.post(
+        f"/auth/chatgpt/accounts/{account_id}/model", json={"model": "example-model"}
+    ).status_code == 200
+    assert client.post("/auth/chatgpt/connect", json={"unknown": True}).status_code == 422
+    assert "fixture-access" not in json.dumps(status)
+
+
+def test_catalog_change_clears_verification_of_removed_model(connection):
+    remote, accounts, _ = connection
+    account_id = authorize(connection)
+    accounts.store.update(lambda state: state["accounts"][0].update(inference_verified=True))
+    remote.catalog = []
+    accounts.catalog(account_id)
+    account = accounts.status()["accounts"][0]
+    assert account["model"] is None
+    assert account["inference_verified"] is False
+
+
 @pytest.mark.parametrize("bad", ["state", "host", "path", "duplicate", "method"])
 def test_callback_rejects_untrusted_parameters(connection, bad):
     remote, accounts, login = connection
@@ -917,7 +963,9 @@ def test_real_api_startup_without_codex_dependencies_or_api_key(tmp_path):
                 time.sleep(0.1)
             else:
                 pytest.fail("Direct API failed to start")
-            assert local.get(base + "/auth/chatgpt").json()["state"] == "DISCONNECTED"
+            # Headless Linux may have no secure OS keyring; startup must still work.
+            state = local.get(base + "/auth/chatgpt").json()["state"]
+            assert state in {"DISCONNECTED", "STORAGE_UNAVAILABLE"}
             doctor = local.get(base + "/doctor").json()
             assert doctor["codex"]["state"] == "OPTIONAL"
             assert doctor["codex_sdk"]["state"] == "UNAVAILABLE"

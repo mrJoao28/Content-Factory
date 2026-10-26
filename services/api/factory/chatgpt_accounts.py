@@ -173,6 +173,7 @@ class ChatGPTAccounts:
             current_account["models"] = models
             if current_account.get("model") not in {m["slug"] for m in models}:
                 current_account["model"] = None
+                current_account["inference_verified"] = False
             return models
 
         return self.store.update(save)
