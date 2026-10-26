@@ -1,0 +1,119 @@
+{
+  "scenes": [
+    {
+      "duration": 4.0,
+      "background": "#132139",
+      "narration": "",
+      "layers": [
+        {
+          "kind": "robot",
+          "asset_id": null,
+          "expression_assets": [],
+          "essential": true,
+          "color": "#64e8cf",
+          "text": "",
+          "size": 0.35,
+          "depth": 1.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "x": 0.2,
+              "y": 0.6,
+              "scale": 1.0,
+              "rotation": 3.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 0.5,
+              "x": 0.275,
+              "y": 0.575,
+              "scale": 1.0,
+              "rotation": -3.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 1.0,
+              "x": 0.35,
+              "y": 0.6,
+              "scale": 1.0,
+              "rotation": 3.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 1.5,
+              "x": 0.425,
+              "y": 0.575,
+              "scale": 1.0,
+              "rotation": -3.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 2.0,
+              "x": 0.5,
+              "y": 0.6,
+              "scale": 1.0,
+              "rotation": 3.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 2.5,
+              "x": 0.575,
+              "y": 0.575,
+              "scale": 1.0,
+              "rotation": -3.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 3.0,
+              "x": 0.6499999999999999,
+              "y": 0.6,
+              "scale": 1.0,
+              "rotation": 3.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 3.5,
+              "x": 0.7250000000000001,
+              "y": 0.575,
+              "scale": 1.0,
+              "rotation": -3.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 4.0,
+              "x": 0.8,
+              "y": 0.6,
+              "scale": 1.0,
+              "rotation": 3.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            }
+          ]
+        }
+      ],
+      "camera": {
+        "pan_x": 0.0,
+        "pan_y": 0.0,
+        "zoom": 1.0
+      },
+      "transition": "fade"
+    }
+  ]
+}

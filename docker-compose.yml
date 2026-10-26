@@ -1,0 +1,22 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    ports: ["127.0.0.1:8000:8000"]
+    command: ["python", "-m", "uvicorn", "factory.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////app/data/content_factory.db
+      STORAGE_ROOT: /app/data
+      OUTPUT_DIR: /app/output
+      ASSETS_DIR: /app/assets
+    volumes: ["./data:/app/data", "./output:/app/output", "./assets:/app/assets", "codex-auth:/root/.codex"]
+  web:
+    build:
+      context: apps/web
+    ports: ["127.0.0.1:3000:3000"]
+    command: ["node", "node_modules/next/dist/bin/next", "start", "--hostname", "0.0.0.0"]
+    depends_on: [api]
+volumes:
+  codex-auth:

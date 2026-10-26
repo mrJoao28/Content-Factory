@@ -1,0 +1,113 @@
+{
+  "scenes": [
+    {
+      "duration": 4.0,
+      "background": "#132139",
+      "narration": "",
+      "layers": [
+        {
+          "kind": "rectangle",
+          "asset_id": null,
+          "expression_assets": [],
+          "essential": true,
+          "color": "#83b8cc",
+          "text": "",
+          "size": 0.35,
+          "depth": 1.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "x": 0.5,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 4.0,
+              "x": 0.5,
+              "y": 0.28,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            }
+          ]
+        },
+        {
+          "kind": "rectangle",
+          "asset_id": null,
+          "expression_assets": [],
+          "essential": true,
+          "color": "#e3b47e",
+          "text": "",
+          "size": 0.35,
+          "depth": 1.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "x": 0.5,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 4.0,
+              "x": 0.5,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            }
+          ]
+        },
+        {
+          "kind": "rectangle",
+          "asset_id": null,
+          "expression_assets": [],
+          "essential": true,
+          "color": "#97c8a4",
+          "text": "",
+          "size": 0.35,
+          "depth": 1.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "x": 0.5,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 4.0,
+              "x": 0.5,
+              "y": 0.72,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            }
+          ]
+        }
+      ],
+      "camera": {
+        "pan_x": 0.0,
+        "pan_y": 0.0,
+        "zoom": 1.0
+      },
+      "transition": "fade"
+    }
+  ]
+}

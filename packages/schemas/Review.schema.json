@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "approved": {
+      "title": "Approved",
+      "type": "boolean"
+    },
+    "notes": {
+      "maxLength": 4000,
+      "minLength": 3,
+      "title": "Notes",
+      "type": "string"
+    },
+    "artifact_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Artifact Hash",
+      "type": "string"
+    },
+    "scientific_sources_checked": {
+      "default": false,
+      "title": "Scientific Sources Checked",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "approved",
+    "notes",
+    "artifact_hash"
+  ],
+  "title": "Review",
+  "type": "object"
+}

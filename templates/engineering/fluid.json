@@ -1,0 +1,199 @@
+{
+  "scenes": [
+    {
+      "duration": 4.0,
+      "background": "#132139",
+      "narration": "",
+      "layers": [
+        {
+          "kind": "rectangle",
+          "asset_id": null,
+          "expression_assets": [],
+          "essential": true,
+          "color": "#2b4058",
+          "text": "",
+          "size": 0.7,
+          "depth": 1.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "x": 0.5,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            }
+          ]
+        },
+        {
+          "kind": "circle",
+          "asset_id": null,
+          "expression_assets": [],
+          "essential": true,
+          "color": "#76c9ee",
+          "text": "",
+          "size": 0.055,
+          "depth": 1.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "x": 0.25,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 4.0,
+              "x": 0.7,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            }
+          ]
+        },
+        {
+          "kind": "circle",
+          "asset_id": null,
+          "expression_assets": [],
+          "essential": true,
+          "color": "#76c9ee",
+          "text": "",
+          "size": 0.055,
+          "depth": 1.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "x": 0.31,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 4.0,
+              "x": 0.72,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            }
+          ]
+        },
+        {
+          "kind": "circle",
+          "asset_id": null,
+          "expression_assets": [],
+          "essential": true,
+          "color": "#76c9ee",
+          "text": "",
+          "size": 0.055,
+          "depth": 1.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "x": 0.37,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 4.0,
+              "x": 0.74,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            }
+          ]
+        },
+        {
+          "kind": "circle",
+          "asset_id": null,
+          "expression_assets": [],
+          "essential": true,
+          "color": "#76c9ee",
+          "text": "",
+          "size": 0.055,
+          "depth": 1.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "x": 0.43,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 4.0,
+              "x": 0.76,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            }
+          ]
+        },
+        {
+          "kind": "circle",
+          "asset_id": null,
+          "expression_assets": [],
+          "essential": true,
+          "color": "#76c9ee",
+          "text": "",
+          "size": 0.055,
+          "depth": 1.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "x": 0.49,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 4.0,
+              "x": 0.7799999999999999,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            }
+          ]
+        }
+      ],
+      "camera": {
+        "pan_x": 0.0,
+        "pan_y": 0.0,
+        "zoom": 1.0
+      },
+      "transition": "fade"
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "$defs": {
+    "AudioCue": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "time": {
+          "maximum": 600,
+          "minimum": 0,
+          "title": "Time",
+          "type": "number"
+        },
+        "volume": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Volume",
+          "type": "number"
+        }
+      },
+      "required": [
+        "asset_id",
+        "time"
+      ],
+      "title": "AudioCue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "music_asset_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Music Asset Id"
+    },
+    "music_volume": {
+      "default": 0.12,
+      "maximum": 0.5,
+      "minimum": 0,
+      "title": "Music Volume",
+      "type": "number"
+    },
+    "narration_volume": {
+      "default": 1,
+      "maximum": 2,
+      "minimum": 0.1,
+      "title": "Narration Volume",
+      "type": "number"
+    },
+    "effects": {
+      "items": {
+        "$ref": "#/$defs/AudioCue"
+      },
+      "maxItems": 32,
+      "title": "Effects",
+      "type": "array"
+    }
+  },
+  "title": "AudioMix",
+  "type": "object"
+}

@@ -1,0 +1,81 @@
+{
+  "scenes": [
+    {
+      "duration": 4.0,
+      "background": "#132139",
+      "narration": "",
+      "layers": [
+        {
+          "kind": "gear",
+          "asset_id": null,
+          "expression_assets": [],
+          "essential": true,
+          "color": "#64e8cf",
+          "text": "",
+          "size": 0.35,
+          "depth": 1.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "x": 0.35,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 4.0,
+              "x": 0.35,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 180.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            }
+          ]
+        },
+        {
+          "kind": "gear",
+          "asset_id": null,
+          "expression_assets": [],
+          "essential": true,
+          "color": "#e4b37e",
+          "text": "",
+          "size": 0.25,
+          "depth": 1.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "x": 0.64,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            },
+            {
+              "time": 4.0,
+              "x": 0.64,
+              "y": 0.5,
+              "scale": 1.0,
+              "rotation": -252.0,
+              "opacity": 1.0,
+              "expression": "happy",
+              "easing": "smooth"
+            }
+          ]
+        }
+      ],
+      "camera": {
+        "pan_x": 0.0,
+        "pan_y": 0.0,
+        "zoom": 1.0
+      },
+      "transition": "fade"
+    }
+  ]
+}

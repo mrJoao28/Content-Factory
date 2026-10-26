@@ -1,0 +1,61 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "confirm": {
+      "title": "Confirm",
+      "type": "boolean"
+    },
+    "music_usage_confirmed": {
+      "title": "Music Usage Confirmed",
+      "type": "boolean"
+    },
+    "title": {
+      "maxLength": 2200,
+      "title": "Title",
+      "type": "string"
+    },
+    "privacy_level": {
+      "enum": [
+        "PUBLIC_TO_EVERYONE",
+        "MUTUAL_FOLLOW_FRIENDS",
+        "FOLLOWER_OF_CREATOR",
+        "SELF_ONLY"
+      ],
+      "title": "Privacy Level",
+      "type": "string"
+    },
+    "disable_duet": {
+      "title": "Disable Duet",
+      "type": "boolean"
+    },
+    "disable_stitch": {
+      "title": "Disable Stitch",
+      "type": "boolean"
+    },
+    "disable_comment": {
+      "title": "Disable Comment",
+      "type": "boolean"
+    },
+    "brand_content_toggle": {
+      "title": "Brand Content Toggle",
+      "type": "boolean"
+    },
+    "brand_organic_toggle": {
+      "title": "Brand Organic Toggle",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "confirm",
+    "music_usage_confirmed",
+    "title",
+    "privacy_level",
+    "disable_duet",
+    "disable_stitch",
+    "disable_comment",
+    "brand_content_toggle",
+    "brand_organic_toggle"
+  ],
+  "title": "DirectPost",
+  "type": "object"
+}

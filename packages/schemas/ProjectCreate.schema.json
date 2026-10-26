@@ -1,0 +1,68 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "idea": {
+      "maxLength": 8000,
+      "minLength": 5,
+      "title": "Idea",
+      "type": "string"
+    },
+    "channel_id": {
+      "anyOf": [
+        {
+          "enum": [
+            "wondernest",
+            "how-it-works"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Channel Id"
+    },
+    "series_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Series Id"
+    },
+    "content_type": {
+      "default": "short",
+      "enum": [
+        "short",
+        "episode",
+        "explainer"
+      ],
+      "title": "Content Type",
+      "type": "string"
+    },
+    "target_duration": {
+      "anyOf": [
+        {
+          "maximum": 600,
+          "minimum": 20,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Duration"
+    }
+  },
+  "required": [
+    "idea"
+  ],
+  "title": "ProjectCreate",
+  "type": "object"
+}

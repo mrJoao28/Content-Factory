@@ -1,0 +1,79 @@
+{
+  "$defs": {
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "maxLength": 2000,
+          "pattern": "^https://",
+          "title": "Url",
+          "type": "string"
+        },
+        "claim": {
+          "maxLength": 2000,
+          "minLength": 3,
+          "title": "Claim",
+          "type": "string"
+        },
+        "evidence": {
+          "default": "",
+          "maxLength": 4000,
+          "title": "Evidence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "claim"
+      ],
+      "title": "Source",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "maxLength": 100,
+      "minLength": 3,
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "maxLength": 5000,
+      "title": "Description",
+      "type": "string"
+    },
+    "beats": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 100,
+      "minItems": 1,
+      "title": "Beats",
+      "type": "array"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/Source"
+      },
+      "maxItems": 30,
+      "title": "Sources",
+      "type": "array"
+    },
+    "safety_notes": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Safety Notes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "title",
+    "description",
+    "beats"
+  ],
+  "title": "Script",
+  "type": "object"
+}

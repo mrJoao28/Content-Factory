@@ -1,0 +1,285 @@
+{
+  "$defs": {
+    "Camera": {
+      "additionalProperties": false,
+      "properties": {
+        "pan_x": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": -1,
+          "title": "Pan X",
+          "type": "number"
+        },
+        "pan_y": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": -1,
+          "title": "Pan Y",
+          "type": "number"
+        },
+        "zoom": {
+          "default": 1,
+          "maximum": 2,
+          "minimum": 1,
+          "title": "Zoom",
+          "type": "number"
+        }
+      },
+      "title": "Camera",
+      "type": "object"
+    },
+    "ExpressionAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "expression": {
+          "enum": [
+            "happy",
+            "surprised",
+            "curious",
+            "sad"
+          ],
+          "title": "Expression",
+          "type": "string"
+        },
+        "asset_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Asset Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expression",
+        "asset_id"
+      ],
+      "title": "ExpressionAsset",
+      "type": "object"
+    },
+    "Keyframe": {
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "maximum": 600,
+          "minimum": 0,
+          "title": "Time",
+          "type": "number"
+        },
+        "x": {
+          "default": 0.5,
+          "maximum": 3,
+          "minimum": -2,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "default": 0.5,
+          "maximum": 3,
+          "minimum": -2,
+          "title": "Y",
+          "type": "number"
+        },
+        "scale": {
+          "default": 1,
+          "maximum": 4,
+          "minimum": 0.01,
+          "title": "Scale",
+          "type": "number"
+        },
+        "rotation": {
+          "default": 0,
+          "maximum": 3600,
+          "minimum": -3600,
+          "title": "Rotation",
+          "type": "number"
+        },
+        "opacity": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Opacity",
+          "type": "number"
+        },
+        "expression": {
+          "default": "happy",
+          "enum": [
+            "happy",
+            "surprised",
+            "curious",
+            "sad"
+          ],
+          "title": "Expression",
+          "type": "string"
+        },
+        "easing": {
+          "default": "smooth",
+          "enum": [
+            "linear",
+            "smooth",
+            "in",
+            "out"
+          ],
+          "title": "Easing",
+          "type": "string"
+        }
+      },
+      "required": [
+        "time"
+      ],
+      "title": "Keyframe",
+      "type": "object"
+    },
+    "Layer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "circle",
+            "rectangle",
+            "arrow",
+            "gear",
+            "robot",
+            "star",
+            "text",
+            "image",
+            "particles"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "asset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset Id"
+        },
+        "expression_assets": {
+          "items": {
+            "$ref": "#/$defs/ExpressionAsset"
+          },
+          "maxItems": 4,
+          "title": "Expression Assets",
+          "type": "array"
+        },
+        "essential": {
+          "default": true,
+          "title": "Essential",
+          "type": "boolean"
+        },
+        "color": {
+          "default": "#64e8cf",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "text": {
+          "default": "",
+          "maxLength": 250,
+          "title": "Text",
+          "type": "string"
+        },
+        "size": {
+          "default": 0.2,
+          "maximum": 1,
+          "minimum": 0.01,
+          "title": "Size",
+          "type": "number"
+        },
+        "depth": {
+          "default": 1,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Depth",
+          "type": "number"
+        },
+        "keyframes": {
+          "items": {
+            "$ref": "#/$defs/Keyframe"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Keyframes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "keyframes"
+      ],
+      "title": "Layer",
+      "type": "object"
+    },
+    "Scene": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "maximum": 60,
+          "minimum": 0.25,
+          "title": "Duration",
+          "type": "number"
+        },
+        "background": {
+          "default": "#132139",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Background",
+          "type": "string"
+        },
+        "narration": {
+          "default": "",
+          "maxLength": 4000,
+          "title": "Narration",
+          "type": "string"
+        },
+        "layers": {
+          "items": {
+            "$ref": "#/$defs/Layer"
+          },
+          "maxItems": 32,
+          "title": "Layers",
+          "type": "array"
+        },
+        "camera": {
+          "$ref": "#/$defs/Camera"
+        },
+        "transition": {
+          "default": "fade",
+          "enum": [
+            "cut",
+            "fade",
+            "magic"
+          ],
+          "title": "Transition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "duration",
+        "layers"
+      ],
+      "title": "Scene",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "scenes": {
+      "items": {
+        "$ref": "#/$defs/Scene"
+      },
+      "maxItems": 100,
+      "minItems": 1,
+      "title": "Scenes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "scenes"
+  ],
+  "title": "Board",
+  "type": "object"
+}
