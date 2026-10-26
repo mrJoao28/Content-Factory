@@ -21,11 +21,35 @@ def diagnose():
             result[name] = {"state": "UNAVAILABLE", "instructions": "Install FFmpeg including FFprobe"}
     from .chatgpt import accounts
     from .providers import configured_provider
+
     provider = configured_provider()
-    result["text_provider"] = {"state": "READY", "note": provider + " (explicit selection; not an inference test)"}
     connection = accounts.status()
-    result["chatgpt"] = {"state": connection["state"], "note": connection.get("message", "Login and inference validation are separate checks")}
-    result["codex"] = auth_status() if provider == "codex" else {"state": "OPTIONAL", "note": "Not used by the direct ChatGPT provider"}
+    result["chatgpt"] = {
+        "state": connection["state"],
+        "note": connection.get("message", "Login and inference validation are separate checks"),
+    }
+    result["codex"] = (
+        auth_status()
+        if provider == "codex"
+        else {"state": "OPTIONAL", "note": "Not used by the direct ChatGPT provider"}
+    )
+    if provider == "chatgpt":
+        active = next((a for a in connection["accounts"] if a["active"]), None)
+        state = connection["state"]
+        note = connection.get("message", "Connect ChatGPT in Settings to generate text.")
+        if state == "CONNECTED":
+            if active and active.get("model"):
+                state = "READY"
+                note = "ChatGPT direct connection and model configured; inference is a separate test."
+            else:
+                state = "WAITING_FOR_MODEL"
+                note = "ChatGPT connected. Refresh the catalog and choose a model in Settings."
+        result["text_provider"] = {"state": state, "note": note}
+    else:
+        result["text_provider"] = {
+            "state": result["codex"]["state"],
+            "note": "Codex compatibility provider selected; login status is not an inference test.",
+        }
     result["codex_sdk"] = {
         "state": "READY" if importlib.util.find_spec("openai_codex") else "UNAVAILABLE",
         "note": "Module detection only; actual model access requires a completed turn",
