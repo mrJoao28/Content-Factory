@@ -3,7 +3,7 @@ import hashlib
 import json
 import os
 import subprocess
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from .config import settings
 
@@ -21,6 +21,9 @@ class TransientFailure(RuntimeError):
 
 
 def safe_path(root: Path, relative: str) -> Path:
+    # Reject Windows drives/UNC paths even when validating data on Linux or in Docker.
+    if PureWindowsPath(relative).drive:
+        raise ValueError("Path outside storage root")
     path = (root / relative).resolve()
     if not path.is_relative_to(root.resolve()) or Path(relative).is_absolute():
         raise ValueError("Path outside storage root")

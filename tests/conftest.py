@@ -13,6 +13,11 @@ from fastapi.testclient import TestClient
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
     # pytest's tmp_path is unique; user data is never dropped or overwritten.
+    # External HTTP uses explicit mock transports. Local callback tests must not
+    # inherit a machine's proxy configuration or require optional SOCKS packages.
+    for name in tuple(os.environ):
+        if name.lower() in {"http_proxy", "https_proxy", "all_proxy"}:
+            monkeypatch.delenv(name)
     engine = database.make_engine("sqlite:///" + str(tmp_path / "test.db"))
     database.Session.configure(bind=engine)
     monkeypatch.setattr(database, "engine", engine)
