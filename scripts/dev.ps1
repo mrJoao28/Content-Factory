@@ -16,6 +16,8 @@ $env:API_PORT="$ApiPort"
 $env:WEB_PORT="$WebPort"
 $env:NEXT_PUBLIC_API_URL="http://127.0.0.1:$ApiPort"
 $env:NEXT_TELEMETRY_DISABLED='1'
+& $pythonPath -m alembic upgrade head
+if($LASTEXITCODE){throw 'Database migration failed. Existing data was preserved; inspect the migration error before starting.'}
 $logsPath=Join-Path $rootPath 'data/logs'
 New-Item -ItemType Directory -Force -Path $logsPath | Out-Null
 $apiProcess=$null

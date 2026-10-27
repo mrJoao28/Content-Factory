@@ -1,18 +1,44 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
+test("3D controls show the real catalog and reject a duration conflict before queuing",async({page})=>{
+ await page.goto("/workspace");
+ await page.getByRole("combobox",{name:"Visual engine",exact:true}).selectOption("blender_3d");
+ await expect(page.getByRole("combobox",{name:"3D character",exact:true})).toBeVisible();
+ await expect(page.getByRole("combobox",{name:"3D environment",exact:true})).toBeVisible();
+ await page.getByRole("spinbutton",{name:"Production duration",exact:true}).fill("8");
+ await page.getByRole("textbox",{name:"Production idea",exact:true}).fill("Create an original 35-second story of Dino and a glowing egg.");
+ await page.getByRole("button",{name:"Start production",exact:true}).click();
+ await expect(page.getByText(/Idea duration conflicts with configured duration/)).toBeVisible();
+});
+
+test("visual regeneration goes through real API and invalidates only the selected revision",async({page,request})=>{
+ const created=await request.post("http://127.0.0.1:8001/projects",{headers:{"X-Factory-Client":"local"},data:{idea:"An original visual recovery browser fixture",channel_id:"wondernest"}});
+ expect(created.ok()).toBeTruthy();const project=await created.json();
+ await page.addInitScript(id=>{localStorage.setItem("factory-project",id);localStorage.setItem("factory-channel","wondernest");},project.id);
+ await page.goto("/preview");
+ await expect(page.getByRole("button",{name:"Regenerate planning",exact:true})).toBeDisabled();
+ await page.getByRole("checkbox",{name:"I confirm this invalidation and text generation.",exact:true}).check();
+ await page.getByRole("button",{name:"Regenerate planning",exact:true}).click();
+ await expect(page.getByText("Planning queued; concept and script retained",{exact:true})).toBeVisible();
+ const detail=await(await request.get(`http://127.0.0.1:8001/projects/${project.id}`)).json();
+ expect(detail.revision).toBe(2);expect(detail.approved_hash).toBeNull();expect(detail.jobs).toHaveLength(2);
+ expect(detail.jobs.filter((j:{revision:number})=>j.revision===1)[0].state).toBe("CANCELLED");
+});
 test("real dashboard, project creation, queue and independent channels",async({page})=>{
  await page.goto("/");
  await expect(page.getByRole("heading",{name:"Production overview"})).toBeVisible();
  await expect(page.getByRole("heading",{name:"A blank canvas, ready for your ideas"})).toBeVisible();
  await page.getByRole("button",{name:"New production"}).click();
  await page.getByRole("textbox",{name:"Production idea"}).fill("A little robot discovers a magical garden and learns to share.");
+ const creation=page.waitForResponse(response=>response.url().endsWith("/projects")&&response.request().method()==="POST");
  await page.getByRole("button",{name:"Start production"}).click();
+ const createdProject=await(await creation).json();
  await expect(page.getByText("Production created",{exact:true})).toBeVisible();
  await expect(page.getByText("Idea accepted and queued")).toBeVisible();
  await page.getByRole("link",{name:"Production queue"}).click();
  await expect(page.getByRole("button",{name:/A little robot discovers/})).toBeVisible();
- await page.getByRole("button",{name:"Pause",exact:true}).click();
+ await page.locator(".queue-details > div").filter({hasText:createdProject.id.slice(0,8)}).getByRole("button",{name:"Pause",exact:true}).click();
  await expect(page.getByText("Pause requested",{exact:true})).toBeVisible();
  await page.getByRole("button",{name:"How It Actually Works",exact:true}).click();
  await expect(page.getByRole("heading",{name:"A blank canvas, ready for your ideas"})).toBeVisible();

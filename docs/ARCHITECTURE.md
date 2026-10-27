@@ -1,5 +1,12 @@
 # Arquitetura
 
+O motor visual é independente do provider textual. `visual_config` por projeto/revisão
+seleciona `compositor_2d` ou `blender_3d`; a migração mantém os projetos anteriores em
+2D. `VisualBoard` é validado antes do checkpoint, e templates Python do repositório
+interpretam somente dados. O worker usa frames em disco com cache por hash, seguido
+da composição FFmpeg e validação/revisão por hash existentes.
+Contrato, configuração, limites e bloqueios de validação: [produção 3D local](LOCAL_3D.md).
+
 ```mermaid
 flowchart LR
   Web[Next.js / React Query] --> API[FastAPI em 127.0.0.1]

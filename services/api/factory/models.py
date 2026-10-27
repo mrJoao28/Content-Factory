@@ -78,6 +78,7 @@ class VideoProject(Entity, Base):
     fps: Mapped[int] = mapped_column(Integer, default=24)
     script: Mapped[dict] = mapped_column(JSON, default=dict)
     storyboard: Mapped[dict] = mapped_column(JSON, default=dict)
+    visual_config: Mapped[dict] = mapped_column(JSON, default=lambda: {"engine": "compositor_2d"})
     assets: Mapped[list] = mapped_column(JSON, default=list)
     narration: Mapped[dict] = mapped_column(JSON, default=dict)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict)

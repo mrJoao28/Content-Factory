@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     ffmpeg_path: str = "ffmpeg"
     ffprobe_path: str = "ffprobe"
     blender_path: str = ""
+    blender_threads: int = Field(default=2, ge=1, le=8)
+    blender_timeout_seconds: int = Field(default=7200, ge=30, le=86400)
+    blender_disk_budget_mb: int = Field(default=4096, ge=128, le=65536)
     piper_path: str = ""
     piper_voice_path: str = ""
     google_client_id: str = ""

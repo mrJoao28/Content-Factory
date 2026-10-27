@@ -21,6 +21,7 @@ from .queue import checkpoint, event
 from .render import probe, render, validate_video
 from .schemas import AgentResult, AudioMix, Board, Metadata, Script
 from .security import ConfigurationRequired, digest, safe_path
+from .visual_schema import VisualBoard, VisualSettings, catalog
 
 
 def produce(job_id, owner, cancel=lambda: False):
@@ -28,6 +29,8 @@ def produce(job_id, owner, cancel=lambda: False):
         job = db.get(ProductionJob, job_id)
         project = db.get(VideoProject, job.project_id)
         project_id, revision = project.id, project.revision
+        visual = VisualSettings.model_validate(project.visual_config)
+        is_3d = visual.engine == "blender_3d"
         artifact = db.scalar(
             select(RenderArtifact).where(
                 RenderArtifact.project_id == project_id, RenderArtifact.revision == revision
@@ -44,6 +47,9 @@ def produce(job_id, owner, cancel=lambda: False):
                 restored = "APPROVED" if project.approved_hash == artifact.sha256 else "HUMAN_REVIEW"
                 checkpoint(job_id, owner, restored)
                 return
+        if is_3d:
+            from .visual_render import blender_info
+            blender_info()
         context = {
             "idea": project.idea,
             "channel": project.channel_id,
@@ -65,6 +71,10 @@ def produce(job_id, owner, cancel=lambda: False):
             {"id": a.id, "name": a.name, "kind": a.kind} for a in db.scalars(select(SceneAsset))
         ]
         context["visual_medium"] = "2.5D geometric or imported transparent sprites; not physical 3D"
+        if is_3d:
+            context.update(visual_medium="local physical 3D, trusted procedural Blender catalog",
+                           visual_catalog=catalog(), visual_selection=visual.model_dump(mode="json"),
+                           fps=project.fps)
         saved = dict(job.checkpoint)
         selection, _ = job_selection(db, job)
     selection = validate_selection(selection)
@@ -92,6 +102,9 @@ def produce(job_id, owner, cancel=lambda: False):
                 cancel=cancel,
                 emit=progress,
             )
+            from .storyboard_limits import validate_generated
+            if is_3d:
+                validate_generated(result, context)
             with provider.persistence_guard():
                 sources = {**saved.get("_ai_step_sources", {}), key: selection}
                 checkpoint(job_id, owner, stage, "_ai_step_sources", sources)
@@ -126,11 +139,16 @@ def produce(job_id, owner, cancel=lambda: False):
             )
         ):
             db.add(ScriptVersion(project_id=project_id, revision=revision, content=current.script))
+    board_type = VisualBoard if is_3d else Board
+    checkpoint(job_id, owner, "STORYBOARDING")
     board = (
-        Board.model_validate(manual_board)
+        board_type.model_validate(manual_board)
         if manual_board
-        else agent("Storyboard Planner", Board, "STORYBOARDING")
+        else agent("Storyboard Planner", board_type, "STORYBOARDING")
     )
+    if is_3d:
+        from .storyboard_limits import validate_generated
+        validate_generated(board, context)
     total = sum(s.duration for s in board.scenes)
     if abs(total - context["duration"]) > 1:
         raise ValueError(f"Storyboard duration {total:.1f}s differs from target {context['duration']}s")
@@ -146,11 +164,13 @@ def produce(job_id, owner, cancel=lambda: False):
                     project_id=project_id,
                     start_time=start,
                     duration=scene.duration,
-                    background=scene.background,
+                    background=scene.environment if is_3d else scene.background,
                     narration=scene.narration,
-                    animation_commands=[x.model_dump(mode="json") for x in scene.layers],
-                    camera_commands=scene.camera.model_dump(),
-                    transition=scene.transition,
+                    animation_commands=[x.model_dump(mode="json") for x in (scene.actions if is_3d else scene.layers)],
+                    camera_commands={"keys": [k.model_dump() for k in scene.camera]} if is_3d else scene.camera.model_dump(),
+                    transition="cut" if is_3d else scene.transition,
+                    characters=[c.model_dump() for c in scene.characters] if is_3d else [],
+                    props=[p.model_dump() for p in scene.props] if is_3d else [],
                 )
             )
             start += scene.duration
@@ -163,9 +183,10 @@ def produce(job_id, owner, cancel=lambda: False):
     checkpoint(job_id, owner, "ASSET_CHECK")
     with Session() as db:
         asset_map = {a.id: safe_path(settings.assets_dir, a.path) for a in db.scalars(select(SceneAsset))}
+    image_scenes = [] if is_3d else board.scenes
     missing = [
         layer.asset_id
-        for s in board.scenes
+        for s in image_scenes
         for layer in s.layers
         if layer.kind == "image"
         and layer.essential
@@ -173,7 +194,7 @@ def produce(job_id, owner, cancel=lambda: False):
     ]
     missing += [
         entry.asset_id
-        for scene in board.scenes
+        for scene in image_scenes
         for layer in scene.layers
         for entry in layer.expression_assets
         if layer.essential and (entry.asset_id not in asset_map or not asset_map[entry.asset_id].is_file())
@@ -193,7 +214,14 @@ def produce(job_id, owner, cancel=lambda: False):
         if abs(measured - total) > 1:
             raise ConfigurationRequired("Imported narration duration must match storyboard (within 1s)")
     else:
-        audio = Piper().scenes(board, folder / "audio", cancel=cancel)
+        if is_3d:
+            from .visual_audio import scene_audio
+            audio = scene_audio(board, folder / "audio", cancel=cancel)
+            with Session.begin() as db:
+                current = db.get(VideoProject, project_id)
+                current.storyboard = board.model_dump(mode="json")
+        else:
+            audio = Piper().scenes(board, folder / "audio", cancel=cancel)
     if narration.get("mix"):
         mix = AudioMix.model_validate(narration["mix"])
         audio = mix_tracks(audio, folder / "mixed.wav", total, mix, asset_map)
@@ -210,20 +238,31 @@ def produce(job_id, owner, cancel=lambda: False):
     checkpoint(job_id, owner, "RENDERING")
     movie = folder / "video.mp4"
     started = time.monotonic()
-    render(
-        board,
-        movie,
-        width=project.width,
-        height=project.height,
-        fps=project.fps,
-        audio=audio,
-        assets=asset_map,
-        cancel=cancel,
-        progress=lambda n: event(project_id, "RENDERING", f"{n}%"),
-    )
+    visual_report = {"engine": "compositor_2d"}
+    if is_3d:
+        import json
+
+        from .visual_render import render_3d
+        last = [None, 0.0]
+
+        def visual_progress(data):
+            # Frame counts are real. Throttle event writes, always emit stage changes and completion.
+            now = time.monotonic()
+            if data["stage"] != last[0] or now-last[1] >= 3 or data["completed"] == data["total"]:
+                event(project_id, "RENDERING", "3D " + json.dumps(data, separators=(",", ":")))
+                last[:] = [data["stage"], now]
+
+        visual_report = render_3d(board, movie, width=project.width, height=project.height,
+                                  fps=project.fps, audio=audio, quality=visual.quality, revision=revision,
+                                  cancel=cancel, progress=visual_progress)
+    else:
+        render(board, movie, width=project.width, height=project.height, fps=project.fps,
+               audio=audio, assets=asset_map, cancel=cancel,
+               progress=lambda n: event(project_id, "RENDERING", f"{n}%"))
     seconds = time.monotonic() - started
     checkpoint(job_id, owner, "TECHNICAL_VALIDATION")
     validation = validate_video(movie, project.width, project.height, project.fps, total)
+    validation["visual"] = visual_report
     validation["review_flags"] = reviewer.flags + (
         ["Scientific claims and source evidence require human verification"]
         if project.channel_id == "how-it-works"
@@ -235,9 +274,10 @@ def produce(job_id, owner, cancel=lambda: False):
     )
     from .render import frame
 
-    frame(
-        board.scenes[0], min(0.5, board.scenes[0].duration / 2), project.width, project.height, asset_map
-    ).save(folder / "thumbnail.png")
+    if not is_3d:
+        frame(
+            board.scenes[0], min(0.5, board.scenes[0].duration / 2), project.width, project.height, asset_map
+        ).save(folder / "thumbnail.png")
     (folder / "script.json").write_text(script.model_dump_json(indent=2), encoding="utf-8")
     (folder / "metadata.json").write_text(metadata.model_dump_json(indent=2), encoding="utf-8")
 

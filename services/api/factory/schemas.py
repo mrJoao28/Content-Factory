@@ -5,6 +5,8 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .visual_schema import VisualBoard, VisualSettings
+
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
@@ -40,7 +42,8 @@ class ProjectCreate(Strict):
     channel_id: Literal["wondernest", "how-it-works"] | None = None
     series_id: str | None = None
     content_type: Literal["short", "episode", "explainer"] = "short"
-    target_duration: float | None = Field(default=None, ge=20, le=600)
+    target_duration: float | None = Field(default=None, ge=8, le=600)
+    visual: VisualSettings = Field(default_factory=VisualSettings)
 
     @model_validator(mode="after")
     def duration(self):
@@ -48,6 +51,14 @@ class ProjectCreate(Strict):
             self.target_duration = (
                 480 if self.content_type == "episode" else 75 if self.channel_id == "how-it-works" else 35
             )
+        if self.visual.engine == "blender_3d":
+            if abs(self.target_duration*self.visual.fps-round(self.target_duration*self.visual.fps)) > .000001:
+                raise ValueError("Duration must represent whole frames")
+            import re
+            requested = re.findall(r"\b(\d+(?:\.\d+)?)\s*(?:-\s*)?(?:seconds?|segundos?|sec|s)\b", self.idea, re.I)
+            if any(abs(float(t)-self.target_duration) > .01 for t in requested):
+                raise ValueError("Idea duration conflicts with configured duration. Edit the idea or duration before starting.")
+            return self
         if self.content_type == "episode" and not 360 <= self.target_duration <= 600:
             raise ValueError("Episodes require 360-600 seconds")
         if self.channel_id == "how-it-works" and not 65 <= self.target_duration <= 90:
@@ -154,7 +165,7 @@ class Metadata(Strict):
 
 class ProjectEdit(Strict):
     script: Script | None = None
-    storyboard: Board | None = None
+    storyboard: Board | VisualBoard | None = None
     metadata: Metadata | None = None
 
 

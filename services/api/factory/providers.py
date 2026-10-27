@@ -172,7 +172,9 @@ def job_diagnostics(db, job):
         "WAITING_FOR_PLATFORM_APPROVAL": "Check granted permissions before reconnecting.",
         "WAITING_FOR_ASSETS": "Check required assets, Piper/voice or imported narration.",
     }
-    if failure.get("code") in {"stream_limit", "event_limit", "text_limit", "runtime_limit"}:
+    if str(failure.get("code") or "").startswith("visual_"):
+        next_action = "Local visual production needs attention. Check Blender 4.5/5.2 LTS CPU, voice, disk and render settings; keep the text connection and resume this revision after resolving the local dependency."
+    elif failure.get("code") in {"stream_limit", "event_limit", "text_limit", "runtime_limit"}:
         next_action = "The response exceeded a finite generation budget. Resume this job with the compact storyboard constraints; completed script checkpoints are retained. Review separate CHATGPT limits if it persists."
     elif failure.get("response"):
         next_action = "Inspect the safe HTTP diagnostic below. Keep this account/model and checkpoints; retry after resolving the reported response or service error."

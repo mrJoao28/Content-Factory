@@ -59,7 +59,7 @@ def create_project(body: ProjectCreate):
             )
         data = body.model_dump()
         data["channel_id"] = channel_id
-        if body.channel_id is None:
+        if body.channel_id is None and body.visual.engine == "compositor_2d":
             data["target_duration"] = None
         body = ProjectCreate.model_validate(data)
         channel = db.get(Channel, channel_id)
@@ -85,7 +85,13 @@ def create_project(body: ProjectCreate):
             width=1280 if landscape else settings.render_default_width,
             height=720 if landscape else settings.render_default_height,
             fps=settings.render_default_fps,
+            visual_config=body.visual.model_dump(mode="json"),
         )
+        if body.visual.engine == "blender_3d":
+            from .visual_render import blender_info
+            blender_info()  # Fail before enqueue/text usage if the local renderer is absent.
+            project.width, project.height = map(int, body.visual.resolution.split("x"))
+            project.fps = body.visual.fps
         db.add(project)
         db.flush()
         enqueue(db, project)
@@ -126,6 +132,12 @@ def edit_project(project_id: str, body: ProjectEdit):
             project.storyboard = {}
             project.metadata_json = {}
         if body.storyboard:
+            from .visual_schema import VisualBoard
+            is_3d = project.visual_config.get("engine") == "blender_3d"
+            if is_3d != isinstance(body.storyboard, VisualBoard):
+                raise ValueError("Storyboard schema must match the project's visual engine")
+            if is_3d:
+                body.storyboard.validate_project(project.target_duration, project.fps)
             project.storyboard = body.storyboard.model_dump(mode="json")
         if body.metadata:
             project.metadata_json = body.metadata.model_dump()

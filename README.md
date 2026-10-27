@@ -1,5 +1,10 @@
 # AI Content Factory
 
+Produção Blender 3D local agora tem um motor explícito por projeto, preservando o
+compositor 2D/2.5D. Leia [configuração e estado da validação 3D](docs/LOCAL_3D.md).
+O adaptador suporta Blender 4.5 e 5.2 LTS em CPU. A instalação detectada neste
+computador é 5.2.3 LTS; veja os resultados e limites em [compatibilidade 5.2](docs/BLENDER_52.md).
+
 Estudio audiovisual local para WonderNest Kids (YouTube) e How It Actually Works (TikTok). Interface Next.js, API FastAPI, SQLite WAL, worker sequencial e compositor 2.5D Python/Pillow/FFmpeg. Nao utiliza n8n, Redis, GPU nem API paga de geracao de video.
 
 ## Instalar no Windows

@@ -1,5 +1,26 @@
 # Guia completo do .env
 
+## Motor 3D local opcional
+
+`BLENDER_PATH` deve apontar para o executável oficial Blender 4.5 ou 5.2 LTS. Instale pelo
+[site oficial](https://www.blender.org/download/), selecione o caminho local e
+valide com `& 'C:/Program Files/Blender Foundation/Blender 5.2/blender.exe' --version`.
+Prefira barras `/` no `.env`, pois `\b` em aspas duplas pode virar backspace.
+Sem esse executável, projetos 2D continuam funcionando e projetos 3D informam o requisito.
+Não coloque scripts, tokens ou parâmetros de shell na variável.
+
+| Nome | Padrão | Obrigatoriedade e validação | Finalidade / erro comum |
+|---|---|---|---|
+| `BLENDER_THREADS` | `2` | Opcional; inteiro 1–8 | Threads CPU. Valores altos podem travar a interface em notebooks. |
+| `BLENDER_TIMEOUT_SECONDS` | `7200` | Opcional; inteiro 30–86400 | Prazo de um processo de render. Resume mantém frames válidos. |
+| `BLENDER_DISK_BUDGET_MB` | `4096` | Opcional; inteiro 128–65536 | Teto conservador RGB de frames + folga; 1080p pode exigir ajuste explícito. |
+
+São opções locais, sem credenciais ou cobrança. Consulte as opções de threads na
+[documentação oficial](https://docs.blender.org/manual/en/4.5/advanced/command_line/arguments.html).
+Copie os exemplos acima somente se desejar modificar os padrões e reinicie a API.
+`doctor.ps1 -Smoke3D` verifica render real; detectar a versão não comprova renderização.
+Mais instruções, limites e recuperação: [produção 3D](LOCAL_3D.md).
+
 Copie `.env.example` para `.env` apenas se ele ainda nao existir. Reinicie a API depois de alterar configuracao. Caminhos relativos sao da raiz do projeto. Aspas duplas protegem caminhos Windows com espacos; prefira `/` nos caminhos. Nao existem OPENAI_API_KEY nem cookies nesta configuracao.
 
 Segredos do cliente ficam apenas no .env ignorado pelo Git. Tokens de usuario ficam em DPAPI (Windows) ou keyring do SO. Nao coloque segredos em NEXT_PUBLIC_*: essas variaveis vao para o navegador.

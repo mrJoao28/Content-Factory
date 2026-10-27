@@ -85,7 +85,7 @@ async def network_error(request, exc):
     return JSONResponse({"detail": "External network request failed; verify connectivity."}, 502)
 
 
-from . import routes_chatgpt, routes_library, routes_projects, routes_system  # noqa: E402
+from . import routes_chatgpt, routes_library, routes_projects, routes_system, routes_visual  # noqa: E402
 
 app.include_router(routes_projects.router)
 app.include_router(routes_library.router)
@@ -93,3 +93,4 @@ app.include_router(routes_library.router)
 # FastAPI/Starlette chooses the first matching path, not the most specific one.
 app.include_router(routes_chatgpt.router)
 app.include_router(routes_system.router)
+app.include_router(routes_visual.router)

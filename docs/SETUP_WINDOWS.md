@@ -1,5 +1,9 @@
 # Windows 11
 
+Para produção 3D opcional, siga [Blender 4.5/5.2 LTS, configuração e smoke render](LOCAL_3D.md).
+`setup.ps1` e `dev.ps1` aplicam a migração aditiva de configuração visual.
+Não apague o banco. `doctor.ps1 -Smoke3D` tenta renderizar um clipe real em CPU.
+
 1. Instale Python 3.11+ de https://www.python.org/downloads/windows/ e Node.js LTS de https://nodejs.org/en/download. Habilite PATH. Use Python x64 convencional se o alias Microsoft Store retornar acesso negado.
 2. Instale FFmpeg com FFprobe: https://ffmpeg.org/download.html. Builds Windows sao listados no site oficial. Extraia e coloque `bin` no PATH, ou defina caminhos absolutos no .env. Valide `ffmpeg -version` e `ffprobe -version`. O FFmpeg reduzido do Playwright nao fornece os codecs/audio exigidos.
 3. Opcional, somente para o provider Codex de compatibilidade: instale o CLI oficial: `npm install -g @openai/codex`. Execute `codex login` e `codex login status` no usuario que rodara o backend. Nao transfira tokens para a aplicacao.

@@ -74,13 +74,13 @@ def diagnose():
         result["database"] = {"state": "READY" if mode == "wal" else "UNAVAILABLE", "journal": mode}
     except Exception:
         result["database"] = {"state": "UNAVAILABLE"}
-    for name, path in (("blender", settings.blender_path), ("piper", settings.piper_path)):
+    for name, path in (("piper", settings.piper_path),):
         binary = shutil.which(path) if path else None
         try:
             if not binary:
                 raise ValueError("missing")
-            run([binary, "--version"], timeout=15)
-            result[name] = {"state": "READY"}
+            run([binary, "--help"], timeout=15)
+            result[name] = {"state": "READY", "note": "Executable responds; voice synthesis requires a separate test."}
         except Exception:
             result[name] = {"state": "UNAVAILABLE", "optional": True}
     result["voice"] = {
@@ -88,6 +88,10 @@ def diagnose():
         if Path(settings.piper_voice_path).is_file() and Path(settings.piper_voice_path + ".json").is_file()
         else "MISSING_CONFIG"
     }
+    from .routes_visual import visual_catalog
+    visual = visual_catalog()
+    result["blender"] = {**visual["blender"], "instructions": visual["blender"].get("message")}
+    result["voice"] = {**visual["voice"], "instructions": visual["voice"].get("message")}
     for name, configured in (
         ("google", settings.google_client_id and settings.google_client_secret),
         ("youtube", settings.google_client_id and settings.google_client_secret),
