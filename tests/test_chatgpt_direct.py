@@ -697,7 +697,6 @@ def test_direct_pipeline_resume_preserves_completed_steps_and_real_render(
             result = AgentResult(summary="Reviewed", flags=[])
         return httpx.Response(
             200,
-            headers={"Content-Type": "text/event-stream"},
             stream=Fragmented(stream_body(text=result.model_dump_json())),
         )
 
@@ -992,7 +991,8 @@ def test_real_api_startup_without_codex_dependencies_or_api_key(tmp_path):
             # Headless Linux may have no secure OS keyring; startup must still work.
             state = local.get(base + "/auth/chatgpt").json()["state"]
             assert state in {"DISCONNECTED", "STORAGE_UNAVAILABLE"}
-            doctor = local.get(base + "/doctor").json()
+            # Doctor invokes real local executables; its bounded probes can exceed a 2s HTTP read on Windows.
+            doctor = local.get(base + "/doctor", timeout=35).json()
             assert doctor["codex"]["state"] == "OPTIONAL"
             assert doctor["codex_sdk"]["state"] == "UNAVAILABLE"
             project = local.post(
@@ -1176,3 +1176,412 @@ def test_recovery_validation_preserves_previous_error(connection, client, monkey
     assert result.status_code == 409
     assert result.json()["detail"]["state"] == expected
     assert client.get(f"/projects/{project['id']}").json()["jobs"][0]["error"] == "Previous failure retained"
+
+
+@pytest.mark.parametrize(
+    "content_type",
+    ["text/event-stream", "", "Text/Event-Stream; charset=UTF-8", " TEXT/EVENT-STREAM ; charset=utf-8"],
+)
+def test_sse_media_type_is_case_insensitive_without_relaxing_completion(connection, content_type):
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+
+    def handler(request):
+        assert request.headers["Accept"] == "text/event-stream"
+        assert json.loads(request.content)["stream"] is True
+        return httpx.Response(
+            200,
+            headers={"Content-Type": content_type, "x-request-id": "req_sse_valid"},
+            stream=Fragmented(stream_body()),
+        )
+
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(handler),
+    )
+    assert provider.generate("Creative Director", {}, AgentResult).summary
+    assert provider.last_diagnostic["format"] == "sse"
+    assert provider.last_diagnostic["request_id"] == "req_sse_valid"
+
+
+@pytest.mark.parametrize(
+    "content_type,payload,kind",
+    [
+        (
+            "application/json",
+            b'{"object":"response","status":"completed","output":[{"private":"never log me"}]}',
+            "json_completed",
+        ),
+        ("application/json", b'{"unexpected":"private story"}', "json"),
+        ("application/json", b"{broken-json private story", "unknown"),
+        ("text/html", b"<html>private login challenge and token</html>", "html"),
+        ("text/plain", b"<!DOCTYPE html><html>private gateway response</html>", "html"),
+        ("application/json", b"", "empty"),
+        ("", b"", "empty"),
+        ("application/json", b'data: {"type":"response.completed"}\n\n', "sse_wrong_content_type"),
+        ("text/plain", b"private story and secret header copy", "unknown"),
+    ],
+)
+def test_non_sse_success_status_is_classified_never_saved(connection, content_type, payload, kind, caplog):
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(
+            200,
+            headers={"Content-Type": content_type, "x-request-id": "req_format_test"},
+            stream=Fragmented(payload),
+        )
+
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(handler),
+    )
+    before = accounts.binding()
+    with pytest.raises(ChatGPTError) as raised:
+        provider.generate("Creative Director", {"private": "private user prompt"}, AgentResult)
+    assert raised.value.state == "FAILED"
+    safe = raised.value.diagnostic
+    assert safe["http_status"] == 200 and safe["format"] == kind
+    assert safe["request_id"] == "req_format_test"
+    assert len(calls) == 1 and not provider.history
+    assert accounts.binding() == before
+    combined = caplog.text + str(raised.value) + json.dumps(safe)
+    for value in [
+        "private story",
+        "private user prompt",
+        "private login",
+        "fixture-access",
+        "Authorization",
+        "Bearer",
+    ]:
+        assert value not in combined
+
+
+@pytest.mark.parametrize(
+    "http_status,code,state",
+    [
+        (200, "subscription_sharing_usage_limit_exceeded", "WAITING_FOR_LIMIT"),
+        (200, "model_not_found", "WAITING_FOR_MODEL"),
+        (400, "unsupported_parameter", "FAILED"),
+        (403, "insufficient_scope", "WAITING_FOR_PLATFORM_APPROVAL"),
+    ],
+)
+def test_json_errors_keep_safe_code_and_request_id_without_private_message(
+    connection, http_status, code, state, caplog
+):
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+    payload = {
+        "error": {
+            "code": code,
+            "param": "stream",
+            "message": "PRIVATE PROMPT fixture-access Bearer secret user@example.com",
+        }
+    }
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(
+            lambda request: httpx.Response(
+                http_status, headers={"x-request-id": "req_json_error"}, json=payload
+            )
+        ),
+    )
+    with pytest.raises(ChatGPTError) as raised:
+        provider.generate("Creative Director", {}, AgentResult)
+    assert raised.value.state == state
+    assert raised.value.diagnostic["format"] == "json_error"
+    assert raised.value.diagnostic["error_code"] == code
+    assert raised.value.diagnostic["http_status"] == http_status
+    assert not provider.history
+    assert "PRIVATE" not in caplog.text + str(raised.value)
+    if code == "unsupported_parameter":
+        assert "parameter stream" in str(raised.value)
+
+
+def test_untrusted_error_codes_and_headers_are_not_copied_to_diagnostics(connection, caplog):
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+
+    def handler(request):
+        return httpx.Response(
+            400,
+            headers={
+                "x-request-id": "Bearer fixture-access",
+                "Content-Type": "application/json; secret=fixture-access",
+            },
+            json={"error": {"code": ["private"], "message": "private", "param": "private"}},
+        )
+
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(handler),
+    )
+    with pytest.raises(ChatGPTError) as raised:
+        provider.generate("Creative Director", {}, AgentResult)
+    assert raised.value.diagnostic["request_id"] is None
+    assert raised.value.diagnostic["error_code"] == "unrecognized_error"
+    assert "fixture-access" not in caplog.text + str(raised.value)
+    assert "private" not in caplog.text.replace("private server message omitted", "")
+
+
+def test_real_routes_persist_safe_transport_diagnostic_and_preserve_job(
+    connection, client, monkeypatch, caplog
+):
+    from factory import chatgpt
+    from factory.db import Session
+    from factory.models import ProductionJob
+    from factory.queue import Worker
+    from sqlalchemy import select
+
+    _, accounts, _ = connection
+    authorize(connection)
+    monkeypatch.setattr(chatgpt, "accounts", accounts)
+    monkeypatch.setattr(settings, "ai_provider", "chatgpt")
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            headers={"Content-Type": "text/html", "x-request-id": "req_gateway"},
+            text="<html>PRIVATE CHALLENGE fixture-access</html>",
+        )
+    )
+    original = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(**{**kwargs, "transport": transport}))
+    project = client.post(
+        "/projects",
+        json={"idea": "A private idea must never enter transport diagnostics", "channel_id": "wondernest"},
+    ).json()
+    with Session.begin() as db:
+        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == project["id"]))
+        job.checkpoint = {**job.checkpoint, "creative_director": {"summary": "Saved earlier", "flags": []}}
+        selection = job.checkpoint["_ai_selection"]
+    assert Worker().once()
+    detail = client.get(f"/projects/{project['id']}").json()
+    saved = detail["jobs"][0]
+    assert saved["state"] == "FAILED" and saved["checkpoint"]["_ai_selection"] == selection
+    assert saved["checkpoint"]["creative_director"]["summary"] == "Saved earlier"
+    assert saved["diagnostic"]["stage"] == "SCRIPTING"
+    assert saved["diagnostic"]["response"]["format"] == "html"
+    assert saved["diagnostic"]["response"]["request_id"] == "req_gateway"
+    assert not detail["artifacts"]
+    assert "PRIVATE CHALLENGE" not in json.dumps(detail) + caplog.text
+    assert "fixture-access" not in json.dumps(detail) + caplog.text
+
+
+@pytest.mark.parametrize(
+    "http_status,payload,content_type,state",
+    [
+        (401, b"<html>PRIVATE</html>", "text/html", "WAITING_FOR_AUTH"),
+        (403, b"<html>PRIVATE</html>", "text/html", "WAITING_FOR_PLATFORM_APPROVAL"),
+        (429, b"", "application/json", "WAITING_FOR_LIMIT"),
+    ],
+)
+def test_non_json_http_errors_keep_status_semantics(connection, http_status, payload, content_type, state):
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(
+            lambda request: httpx.Response(
+                http_status,
+                headers={"Content-Type": content_type, "x-request-id": "req_http_error"},
+                content=payload,
+            )
+        ),
+    )
+    with pytest.raises(ChatGPTError) as raised:
+        provider.generate("Creative Director", {}, AgentResult)
+    assert raised.value.state == state
+    assert raised.value.diagnostic["http_status"] == http_status
+    assert raised.value.diagnostic["format"] == ("html" if payload else "empty")
+    assert "PRIVATE" not in str(raised.value)
+
+
+def test_connection_test_real_route_returns_safe_response_metadata(connection, client, monkeypatch):
+    from factory import routes_chatgpt
+
+    _, accounts, _ = connection
+    authorize(connection)
+    monkeypatch.setattr(routes_chatgpt, "accounts", accounts)
+    original = httpx.AsyncClient
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            headers={"x-request-id": "req_test_connection"},
+            json={
+                "error": {
+                    "code": "unsupported_parameter",
+                    "param": "stream",
+                    "message": "PRIVATE PROMPT fixture-access",
+                }
+            },
+        )
+    )
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(**{**kwargs, "transport": transport}))
+    response = client.post("/auth/chatgpt/test", json={"confirm_plan_usage": True})
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["state"] == "FAILED"
+    assert detail["diagnostic"]["format"] == "json_error"
+    assert detail["diagnostic"]["request_id"] == "req_test_connection"
+    assert "parameter stream" in detail["message"]
+    assert "PRIVATE" not in response.text and "fixture-access" not in response.text
+    assert not accounts.status()["accounts"][0]["inference_verified"]
+
+
+@pytest.mark.parametrize(
+    "payload,kind",
+    [
+        (b'{"error":{"code":"model_not_found","message":"PRIVATE"}}', "json_error"),
+        (b'{"object":"response","status":"completed","output":[]}', "json_completed"),
+        (b"<html>PRIVATE gateway page</html>", "html"),
+    ],
+)
+def test_missing_content_type_does_not_accept_non_sse(connection, payload, kind):
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(lambda request: httpx.Response(200, stream=Fragmented(payload))),
+    )
+    with pytest.raises(ChatGPTError) as raised:
+        provider.generate("Creative Director", {}, AgentResult)
+    assert raised.value.diagnostic["content_type"] == "missing"
+    assert raised.value.diagnostic["format"] == kind
+    assert not provider.history
+    assert "PRIVATE" not in str(raised.value)
+
+
+def test_missing_content_type_requires_completed_event_and_real_json_schema(connection):
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+    selection = {"provider": "chatgpt", "account_id": account_id, "model": "example-model"}
+    partial = b'data: {"type":"response.output_text.delta","delta":"PRIVATE partial"}\n\n'
+    provider = ChatGPTProvider(
+        accounts,
+        selection,
+        httpx.MockTransport(lambda request: httpx.Response(200, stream=Fragmented(partial))),
+    )
+    from factory.chatgpt_http import ChatGPTTransient
+
+    with pytest.raises(ChatGPTTransient) as raised:
+        asyncio.run(provider._stream({}, "fixture-bearer", lambda kind: None))
+    assert raised.value.diagnostic["error_code"] == "missing_completion"
+    assert not provider.history
+    invalid = ChatGPTProvider(
+        accounts,
+        selection,
+        httpx.MockTransport(
+            lambda request: httpx.Response(200, stream=Fragmented(stream_body(text="PRIVATE invalid JSON")))
+        ),
+    )
+    with pytest.raises(ValueError) as raised:
+        invalid.generate("Creative Director", {}, AgentResult)
+    assert raised.value.diagnostic["error_code"] == "invalid_content"
+    assert "PRIVATE" not in str(raised.value)
+    assert not invalid.history
+
+
+def test_missing_content_type_valid_sse_bom_and_fragmented_unicode(connection):
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+    content = b"\xef\xbb\xbf" + b": keepalive\r\n\r\n" + stream_body()
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(lambda request: httpx.Response(200, stream=Fragmented(content))),
+    )
+    assert provider.generate("Creative Director", {}, AgentResult).summary == "A caf\u00e9"
+    assert provider.last_diagnostic["content_type"] == "missing"
+    assert provider.last_diagnostic["format"] == "sse"
+
+
+@pytest.mark.parametrize("source", ["delta", "text_done", "item_done", "all"])
+def test_empty_terminal_output_uses_streamed_text_only_after_completed(connection, source):
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+    text = AgentResult(summary="Completed stream", flags=[]).model_dump_json()
+    events = []
+    if source in {"delta", "all"}:
+        events += [
+            {"type": "response.output_text.delta", "output_index": 0, "content_index": 0, "delta": text[:8]},
+            {"type": "response.output_text.delta", "output_index": 0, "content_index": 0, "delta": text[8:]},
+        ]
+    if source in {"text_done", "all"}:
+        events.append(
+            {"type": "response.output_text.done", "output_index": 0, "content_index": 0, "text": text}
+        )
+    if source in {"item_done", "all"}:
+        events.append(
+            {
+                "type": "response.output_item.done",
+                "output_index": 0,
+                "item": {
+                    "type": "message",
+                    "role": "assistant",
+                    "status": "completed",
+                    "content": [{"type": "output_text", "text": text}],
+                },
+            }
+        )
+    events.append({"type": "response.completed", "response": {"status": "completed", "output": []}})
+    body = b"".join(("data: " + json.dumps(event) + "\n\n").encode() for event in events)
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(lambda request: httpx.Response(200, stream=Fragmented(body))),
+    )
+    assert provider.generate("Creative Director", {}, AgentResult).summary == "Completed stream"
+    assert provider.last_diagnostic["format"] == "sse"
+    assert provider.last_diagnostic["content_type"] == "missing"
+    assert len(provider.history) == 1
+
+
+@pytest.mark.parametrize("outcome", ["eof", "incomplete", "failed", "refusal", "empty", "invalid_json"])
+def test_streamed_text_never_bypasses_completion_errors_or_schema(connection, outcome):
+    from factory.chatgpt_http import ChatGPTTransient
+
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+    text = (
+        AgentResult(summary="PRIVATE streamed content", flags=[]).model_dump_json()
+        if outcome != "invalid_json"
+        else "PRIVATE invalid JSON"
+    )
+    events = [] if outcome == "empty" else [{"type": "response.output_text.delta", "delta": text}]
+    if outcome == "incomplete":
+        events.append({"type": "response.incomplete", "response": {"status": "incomplete"}})
+    elif outcome == "failed":
+        events.append(
+            {
+                "type": "response.failed",
+                "response": {"error": {"code": "subscription_sharing_usage_limit_exceeded"}},
+            }
+        )
+    elif outcome == "refusal":
+        events.append({"type": "response.refusal.done", "refusal": "PRIVATE refusal"})
+    if outcome != "eof":
+        events.append({"type": "response.completed", "response": {"status": "completed", "output": []}})
+    body = b"".join(("data: " + json.dumps(event) + "\n\n").encode() for event in events)
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(lambda request: httpx.Response(200, stream=Fragmented(body))),
+    )
+    with pytest.raises((ValueError, ChatGPTError, ChatGPTTransient)) as raised:
+        if outcome == "invalid_json":
+            provider.generate("Creative Director", {}, AgentResult)
+        else:
+            asyncio.run(provider._stream({}, "fixture-bearer", lambda kind: None))
+    assert "PRIVATE" not in str(raised.value)
+    assert not provider.history
+    if outcome == "empty":
+        assert "delta_events=0" in str(raised.value)

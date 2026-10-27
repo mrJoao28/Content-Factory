@@ -73,3 +73,7 @@ Nao foi encontrada uma licenca de reutilizacao na arvore da referencia inspecion
 ## Producao antiga falhando em Codex
 
 Consulte [PROVIDER_RECOVERY.md](PROVIDER_RECOVERY.md) para comparar a selecao global com a selecao da tarefa e recuperar pela fila ou revisao sem recriar o projeto. O botao Use selected ChatGPT and resume exige confirmar o uso do plano, preserva checkpoints e valida a conexao antes da troca.
+
+## Erro de SSE ou formato de resposta
+
+Consulte [CHATGPT_RESPONSE_FORMAT.md](CHATGPT_RESPONSE_FORMAT.md). Uma resposta SSE com Content-Type ausente agora e identificada por conteudo e validada integralmente. HTML, JSON de erro e resposta vazia possuem diagnosticos seguros distintos. O probe opcional utiliza o modelo selecionado e exige consentimento de consumo do plano.

@@ -212,6 +212,7 @@ class Worker:
                             else "configuration",
                         ),
                         "message": job.error,
+                        "response": getattr(exc, "diagnostic", None),
                     },
                 }
                 if project.revision == job.revision:

@@ -1,5 +1,15 @@
 # Validacao e pendencias
 
+## SSE e formato ChatGPT: validacao final
+
+- Base f1b770d; detalhes em [CHATGPT_RESPONSE_FORMAT.md](CHATGPT_RESPONSE_FORMAT.md). O proprietario reproduziu HTTP 200 sem Content-Type, primeiro rejeitado como SSE-like; apos correcao do cabecalho, o terminal nao fornecia texto no campo esperado. O parser agora reconhece o stream por conteudo apenas quando o cabecalho falta e reune texto dos eventos antes da confirmacao terminal.
+- O proprietario confirmou inferencia real no probe corrigido: HTTP 200, content_type=missing, format=sse, error_code=null. O script so retorna esse resultado depois de completar inferencia e validar AgentResult. Nao houve geracao/publicacao de video da conta real por este agente.
+- Pytest final: **152 passaram**, sem skips, em **269.75s** (`python -m pytest -q --basetemp=data/chatgpt-response-complete-final`). Inclui os formatos SSE/JSON erro/JSON completed/HTML/vazio, MIME ausente, UTF-8 e chunks fragmentados, coleta de texto por eventos, recusa, erro tardio, EOF, schema invalido, preservacao de selecao/checkpoints e MP4 local real dos dois canais com respostas externas controladas.
+- **Ruff passou**, TypeScript strict passou, Vitest **6 passaram**, build Next.js passou e Playwright **7 passaram** com API/frontend reais em portas isoladas. O teste de navegador cobre a apresentacao do diagnostico seguro na revisao, sem simular as rotas verificadas.
+- Um timeout do teste de startup em /doctor foi ajustado de 2s para 35s nessa chamada, pois o endpoint executa probes locais reais com limites proprios; a execucao final passou. Os servicos de producao nao tiveram seus timeouts alterados por isso.
+- Logs e respostas incluem somente metadados permitidos e mensagens locais; nenhum prompt, output, HTML, mensagem bruta do servidor, token ou Authorization e registrado pelo diagnostico. Login, conta/modelo, checkpoints e banco do proprietario foram preservados.
+- Criacao de branch tentada e bloqueada pela permissao de somente leitura de .git. Nenhum commit, push ou PR desta correcao foi criado; alteracoes permanecem locais.
+
 ## Recuperacao de provider/job: 2026-10-26
 
 - Base 4730771; causa e dados sanitizados documentados em [PROVIDER_RECOVERY.md](PROVIDER_RECOVERY.md). Banco do proprietario consultado somente em leitura; nenhuma producao real foi retomada ou recriada pelo agente.

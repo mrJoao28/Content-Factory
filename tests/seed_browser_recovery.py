@@ -44,3 +44,29 @@ with Session.begin() as db:
 
     db.flush()
     job.updated_at = utcnow()
+
+    if "--response-format" in sys.argv:
+        job.error = "ChatGPT returned HTML instead of SSE. Check network filtering or service availability."
+        response = {
+            "http_status": 200,
+            "content_type": "text/html",
+            "request_id": "req_browser_gateway",
+            "format": "html",
+            "error_code": "response_contract",
+            "message": job.error,
+        }
+        job.checkpoint = {
+            **job.checkpoint,
+            "_ai_selection": {
+                "provider": "chatgpt",
+                "account_id": "browser-fixture-account",
+                "model": "browser-fixture-model",
+            },
+            "_failure": {
+                "stage": "SCRIPTING",
+                "provider": "chatgpt",
+                "code": "response_contract",
+                "message": job.error,
+                "response": response,
+            },
+        }

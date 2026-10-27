@@ -42,11 +42,21 @@ def controlled(action):
     try:
         return action()
     except ChatGPTError as error:
-        raise HTTPException(409, {"state": error.state, "code": error.code, "message": str(error)}) from None
+        raise HTTPException(
+            409,
+            {
+                "state": error.state,
+                "code": error.code,
+                "message": str(error),
+                "diagnostic": getattr(error, "diagnostic", None),
+            },
+        ) from None
     except Cancelled:
         raise HTTPException(409, "Text generation cancelled") from None
-    except ChatGPTTransient:
-        raise HTTPException(503, "ChatGPT temporarily unavailable. Retry later.") from None
+    except ChatGPTTransient as error:
+        raise HTTPException(
+            503, {"message": str(error), "diagnostic": getattr(error, "diagnostic", None)}
+        ) from None
     except (ConfigurationRequired, OSError):
         raise HTTPException(
             409, "Secure ChatGPT storage or local listener unavailable. Retry from the same Windows account."

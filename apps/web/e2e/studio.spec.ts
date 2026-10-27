@@ -105,3 +105,27 @@ test("failed production switches explicitly to ChatGPT and resumes through real 
  expect(detail.jobs[0].checkpoint.creative_director.summary).toBe("Retained browser-test checkpoint");
  expect(detail.artifacts).toHaveLength(0);
 });
+
+
+test("review shows safe transport format diagnostic without replacing selection or checkpoints",async({page,request})=>{
+ test.skip(process.platform!=="win32","Uses the Windows DPAPI browser fixture.");
+ const base="http://127.0.0.1:8001";const headers={"X-Factory-Client":"local"};
+ const created=await request.post(base+"/projects",{headers,data:{idea:"A production stopped by an unexpected response format",channel_id:"wondernest"}});
+ expect(created.status()).toBe(201);const project=await created.json();
+ const root=path.resolve(process.cwd(),"../..");
+ execFileSync(path.join(root,".venv/Scripts/python.exe"),[path.join(root,"tests/seed_browser_recovery.py"),project.id,"--response-format"],{cwd:root,env:process.env,windowsHide:true});
+ await page.goto("/preview");
+ await page.evaluate(id=>{localStorage.setItem("factory-project",id);localStorage.setItem("factory-channel","wondernest");},project.id);
+ await page.reload();
+ const recovery=page.getByRole("region",{name:"Production text selection"});
+ await expect(recovery.getByText("Safe ChatGPT response diagnostic",{exact:true})).toBeVisible();
+ await expect(recovery.locator("pre")).toContainText('"http_status": 200');
+ await expect(recovery.locator("pre")).toContainText('"format": "html"');
+ await expect(recovery.locator("pre")).toContainText("req_browser_gateway");
+ await expect(recovery.getByText("Production interrupted: SCRIPTING",{exact:true})).toBeVisible();
+ const detail=await (await request.get(base+`/projects/${project.id}`)).json();
+ expect(detail.jobs[0].state).toBe("FAILED");
+ expect(detail.jobs[0].checkpoint._ai_selection.model).toBe("browser-fixture-model");
+ expect(detail.jobs[0].checkpoint.creative_director.summary).toBe("Retained browser-test checkpoint");
+ expect(detail.artifacts).toHaveLength(0);
+});

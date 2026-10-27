@@ -172,7 +172,9 @@ def job_diagnostics(db, job):
         "WAITING_FOR_PLATFORM_APPROVAL": "Check granted permissions before reconnecting.",
         "WAITING_FOR_ASSETS": "Check required assets, Piper/voice or imported narration.",
     }
-    if failure.get("code") == "invalid_content":
+    if failure.get("response"):
+        next_action = "Inspect the safe HTTP diagnostic below. Keep this account/model and checkpoints; retry after resolving the reported response or service error."
+    elif failure.get("code") == "invalid_content":
         next_action = "Generated text did not match the required schema. Review the selected model and retry; invalid JSON was not saved."
     elif failure.get("code") == "transient":
         next_action = "The external service is temporarily unavailable. Retry later with the same connection."
@@ -183,6 +185,7 @@ def job_diagnostics(db, job):
         "selection_source": source,
         "stage": stage,
         "code": failure.get("code"),
+        "response": failure.get("response"),
         "global": provider_configuration(db),
         "next_action": next_action,
         "completed_steps": [key for key in job.checkpoint if not key.startswith("_")],

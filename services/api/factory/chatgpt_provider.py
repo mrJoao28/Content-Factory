@@ -3,6 +3,7 @@
 import asyncio
 import codecs
 import json
+import logging
 import re
 import threading
 import time
@@ -12,22 +13,35 @@ import httpx
 from pydantic import ValidationError
 
 from .chatgpt_http import MAX_BODY, RESOURCE, ChatGPTError, ChatGPTTransient, error_for
+from .chatgpt_response import (
+    attach,
+    diagnostic,
+    media_type,
+    non_sse_failure,
+    safe_error_details,
+    sniff_missing_content_type,
+)
+from .chatgpt_text import StreamText
 from .config import settings
 from .security import Cancelled
 from .text_roles import ROLES
 
 
-async def sse_events(response):
-    if response.headers.get("content-type", "").split(";")[0].strip() != "text/event-stream":
+async def sse_events(response, chunks=None):
+    if media_type(response) not in {"text/event-stream", ""}:
         raise ValueError("ChatGPT did not return an SSE stream")
     data, size, buffer = [], 0, ""
     decoder = codecs.getincrementaldecoder("utf-8")("strict")
+    beginning = True
     try:
-        async for chunk in response.aiter_bytes():
+        async for chunk in chunks if chunks is not None else response.aiter_bytes():
             size += len(chunk)
             if size > MAX_BODY:
                 raise ValueError("ChatGPT stream exceeded the allowed size")
             buffer += decoder.decode(chunk)
+            if beginning and buffer:
+                buffer = buffer.removeprefix("\ufeff")
+                beginning = False
             while True:
                 boundary = re.search(r"\r\n|\r|\n", buffer)
                 if boundary is None or (buffer[boundary.start() :] == "\r"):
@@ -52,22 +66,36 @@ async def sse_events(response):
     # A partial SSE frame at EOF is not a valid terminal event.
 
 
-def completed_text(event):
+def completed_text(event, streamed_text=""):
     response = event.get("response", {})
-    if response.get("status") != "completed" or response.get("error"):
+    if not isinstance(response, dict) or response.get("status") != "completed" or response.get("error"):
         raise ValueError("ChatGPT response did not complete successfully")
     parts = []
-    for item in response.get("output", []):
+    output = response.get("output", [])
+    if not isinstance(output, list):
+        raise ValueError("ChatGPT returned invalid output data")
+    for item in output:
+        if not isinstance(item, dict):
+            raise ValueError("ChatGPT returned invalid output data")
         if item.get("type") == "reasoning":
             continue
         if item.get("type") != "message" or item.get("role") != "assistant":
             raise ValueError("ChatGPT returned unsupported output; no tools are executed")
-        for content in item.get("content", []):
+        contents = item.get("content", [])
+        if not isinstance(contents, list):
+            raise ValueError("ChatGPT returned invalid output data")
+        for content in contents:
+            if not isinstance(content, dict):
+                raise ValueError("ChatGPT returned invalid output data")
             if content.get("type") != "output_text" or not isinstance(content.get("text"), str):
                 raise ValueError("ChatGPT refused or returned non-text output")
             parts.append(content["text"])
-    result = "".join(parts)
-    if not result or len(result.encode()) > MAX_BODY:
+    result = "".join(parts) or streamed_text
+    try:
+        size = len(result.encode("utf-8"))
+    except UnicodeError:
+        raise ValueError("ChatGPT sent invalid Unicode text") from None
+    if not result or size > MAX_BODY:
         raise ValueError("ChatGPT completed without valid text")
     return result
 
@@ -79,6 +107,7 @@ class ChatGPTProvider:
         self.accounts, self.selection, self.transport = accounts, dict(selection), transport
         self.generation = None
         self.history = []
+        self.last_diagnostic = None
 
     def ensure_session(self):
         account_id, model = self.selection.get("account_id"), self.selection.get("model")
@@ -108,42 +137,92 @@ class ChatGPTProvider:
                 json=body,
                 headers={"Authorization": "Bearer " + token, "Accept": "text/event-stream"},
             ) as response:
-                if not response.is_success:
-                    data = bytearray()
-                    async for chunk in response.aiter_bytes():
-                        data.extend(chunk)
-                        if len(data) > MAX_BODY:
-                            raise ValueError("ChatGPT error response exceeded the allowed size")
-                    try:
-                        error = json.loads(data)
-                    except ValueError:
-                        error = {}
-                    failure = error_for(response.status_code, error, response.headers)
+                self.last_diagnostic = diagnostic(
+                    response,
+                    "sse" if media_type(response) == "text/event-stream" else "pending",
+                    message="No completed outcome recorded yet.",
+                )
+                try:
+                    chunks = None
+                    if not response.is_success:
+                        raise await non_sse_failure(response)
+                    if not media_type(response):
+                        matched, chunks = await sniff_missing_content_type(response)
+                        if not matched:
+                            raise await non_sse_failure(response, chunks)
+                    elif media_type(response) != "text/event-stream":
+                        raise await non_sse_failure(response)
+                    emitted = False
+                    completed = None
+                    text_stream = StreamText()
+                    async for item in sse_events(response, chunks):
+                        kind = item.get("type")
+                        if completed is not None and kind not in {
+                            "error",
+                            "response.failed",
+                            "response.incomplete",
+                        }:
+                            raise ValueError("ChatGPT sent output after response completion")
+                        text_stream.add(item, completed_text)
+                        if kind in {"error", "response.failed"}:
+                            failed = item.get("response", {})
+                            if kind == "response.failed" and not isinstance(failed, dict):
+                                raise ValueError("ChatGPT sent invalid failure event data")
+                            detail = (
+                                failed.get("error", {})
+                                if kind == "response.failed"
+                                else item.get("error", item)
+                            )
+                            error_body = {"error": detail}
+                            code, message = safe_error_details(error_body)
+                            raise attach(
+                                error_for(400, error_body), diagnostic(response, "sse", code, message)
+                            )
+                        if kind == "response.incomplete":
+                            raise ValueError("ChatGPT response was incomplete; no partial text was saved")
+                        if kind == "response.output_text.delta" and not emitted:
+                            emit("receiving_text")
+                            emitted = True
+                        if kind == "response.completed":
+                            if completed is not None:
+                                raise ValueError("ChatGPT sent duplicate terminal events")
+                            try:
+                                completed = completed_text(item, text_stream.completed())
+                            except ValueError as failure:
+                                if str(failure) == "ChatGPT completed without valid text":
+                                    raise ValueError(
+                                        "ChatGPT completed without valid text; " + text_stream.summary()
+                                    ) from None
+                                raise
+                    if completed is None:
+                        kind = "empty" if response.num_bytes_downloaded == 0 else "sse"
+                        raise attach(
+                            ChatGPTTransient(),
+                            diagnostic(
+                                response,
+                                kind,
+                                "missing_completion",
+                                "Stream ended without response.completed; no partial text was saved.",
+                            ),
+                        )
+                except (ChatGPTError, ChatGPTTransient, ValueError) as failure:
+                    if not hasattr(failure, "diagnostic"):
+                        attach(failure, diagnostic(response, "sse", "invalid_sse", str(failure)))
+                    self.last_diagnostic = failure.diagnostic
+                    logging.getLogger(__name__).warning(
+                        "chatgpt_response %s", json.dumps(self.last_diagnostic)
+                    )
                     if isinstance(failure, ChatGPTError) and failure.state == "WAITING_FOR_AUTH":
                         self.accounts.mark_expired(self.selection["account_id"], self.generation)
-                    raise failure
-                emitted = False
-                completed = None
-                async for item in sse_events(response):
-                    kind = item.get("type")
-                    if kind in {"error", "response.failed"}:
-                        detail = (
-                            item.get("response", {}).get("error", {})
-                            if kind == "response.failed"
-                            else item.get("error", item)
-                        )
-                        raise error_for(400, {"error": detail})
-                    if kind == "response.incomplete":
-                        raise ValueError("ChatGPT response was incomplete; no partial text was saved")
-                    if kind == "response.output_text.delta" and not emitted:
-                        emit("receiving_text")
-                        emitted = True
-                    if kind == "response.completed":
-                        if completed is not None:
-                            raise ValueError("ChatGPT sent duplicate terminal events")
-                        completed = completed_text(item)
-                if completed is None:
-                    raise ChatGPTTransient()
+                    raise
+                self.last_diagnostic = diagnostic(
+                    response,
+                    "sse",
+                    message="Missing Content-Type; SSE content and completed event validated."
+                    if not media_type(response)
+                    else None,
+                )
+                logging.getLogger(__name__).info("chatgpt_response %s", json.dumps(self.last_diagnostic))
                 return completed
 
     async def _request(self, body, token, emit, cancel, deadline):
@@ -160,9 +239,21 @@ class ChatGPTProvider:
         watchdog = asyncio.create_task(watch())
         try:
             finished, _ = await asyncio.wait({stream, watchdog}, return_when=asyncio.FIRST_COMPLETED)
-            if watchdog in finished:
-                return await watchdog
-            return await stream
+            if stream in finished:
+                return await stream
+            return await watchdog
+        except (ChatGPTTransient, ChatGPTError) as failure:
+            if self.last_diagnostic and not hasattr(failure, "diagnostic"):
+                attach(
+                    failure,
+                    {
+                        **self.last_diagnostic,
+                        "error_code": self.last_diagnostic.get("error_code") or "interrupted_stream",
+                        "message": self.last_diagnostic.get("message")
+                        or "Response interrupted before completion; no partial result was saved.",
+                    },
+                )
+            raise
         finally:
             stream.cancel()
             watchdog.cancel()
@@ -230,9 +321,17 @@ class ChatGPTProvider:
                     result = response_type.model_validate_json(raw)
                 except (ValidationError, ValueError):
                     if repair:
-                        raise ValueError(
+                        failure = ValueError(
                             "ChatGPT JSON did not match the required content schema; no invalid result was saved"
-                        ) from None
+                        )
+                        if self.last_diagnostic:
+                            self.last_diagnostic = {
+                                **self.last_diagnostic,
+                                "error_code": "invalid_content",
+                                "message": str(failure),
+                            }
+                            attach(failure, self.last_diagnostic)
+                        raise failure from None
                     prompt["correction"] = (
                         "Your previous result did not match the schema. Return valid JSON only; review all required fields and constraints."
                     )

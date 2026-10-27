@@ -21,7 +21,7 @@ export function JobRecovery({job,act}:{job:Job;act:Act}) {
  <p><strong>Production text connection:</strong> {describe(current)}</p><p>Selection evidence: {job.diagnostic?.selection_source||"checkpoint"}.</p>
  <p>Global provider for new productions: {data?.provider||"checking"}. Source: {data?.configuration?.source||job.diagnostic?.global.source||"checking"}.</p>
  <p className="muted">Saved Settings takes precedence over .env. Existing productions retain their own selection.</p>
- {job.error&&<div role="alert"><strong>Production interrupted: {job.diagnostic?.stage||"stage not recorded"}</strong><p>{job.error}</p><p>{job.diagnostic?.next_action||"Review the configuration before resuming."}</p></div>}
+ {job.error&&<div role="alert"><strong>Production interrupted: {job.diagnostic?.stage||"stage not recorded"}</strong><p>{job.error}</p><p>{job.diagnostic?.next_action||"Review the configuration before resuming."}</p>{job.diagnostic?.response&&<details open><summary>Safe ChatGPT response diagnostic</summary><pre>{JSON.stringify(job.diagnostic.response,null,2)}</pre><p>No tokens, authorization headers or response content are included.</p></details>}</div>}
  {waiting&&<><p>New selection: {describe(next)}</p>
  {current?.provider!==next?.provider&&<p>This production keeps its previous provider until you explicitly apply the new selection.</p>}
  {!!job.diagnostic?.completed_steps.length&&<p>Completed checkpoints are retained and may have been produced by another model: {job.diagnostic.completed_steps.join(", ")}.</p>}

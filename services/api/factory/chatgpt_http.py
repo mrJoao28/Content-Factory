@@ -44,6 +44,8 @@ def retry_after(headers):
 def error_for(status, body=None, headers=None):
     error = body.get("error", {}) if isinstance(body, dict) else {}
     code = error.get("code", "") if isinstance(error, dict) else error if isinstance(error, str) else ""
+    if not isinstance(code, str):
+        code = ""
     if status == 429 or code in {
         "subscription_sharing_usage_limit_exceeded",
         "subscription_sharing_usage_unavailable",
