@@ -172,7 +172,9 @@ def job_diagnostics(db, job):
         "WAITING_FOR_PLATFORM_APPROVAL": "Check granted permissions before reconnecting.",
         "WAITING_FOR_ASSETS": "Check required assets, Piper/voice or imported narration.",
     }
-    if failure.get("response"):
+    if failure.get("code") in {"stream_limit", "event_limit", "text_limit", "runtime_limit"}:
+        next_action = "The response exceeded a finite generation budget. Resume this job with the compact storyboard constraints; completed script checkpoints are retained. Review separate CHATGPT limits if it persists."
+    elif failure.get("response"):
         next_action = "Inspect the safe HTTP diagnostic below. Keep this account/model and checkpoints; retry after resolving the reported response or service error."
     elif failure.get("code") == "invalid_content":
         next_action = "Generated text did not match the required schema. Review the selected model and retry; invalid JSON was not saved."

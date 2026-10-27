@@ -542,3 +542,16 @@ Para cada variavel abaixo, o exemplo nao contem credenciais reais.
 URL oficial e passo a passo: https://developers.openai.com/siwc/token-sharing-open-source/sign-in. Nao obtenha ou preencha client_id/secret/tokens manualmente: o navegador autoriza a identidade Content Factory e o backend guarda o registro emitido no vault. O guia [CHATGPT_DIRECT.md](CHATGPT_DIRECT.md) descreve permissao de plano, callback, modelos e reconexao.
 
 CODEX_TIMEOUT_SECONDS e CODEX_MAX_CONCURRENT_JOBS tambem limitam o provider textual direto. O Codex CLI/SDK e opcional nesse modo. Mantenha as configuracoes Google/YouTube/TikTok existentes; a mudanca nao altera seus segredos ou permissoes.
+
+## Orcamentos de inferencia ChatGPT
+
+As quatro variaveis sao opcionais, locais e nao secretas. Nao exigem credenciais nem configuracao remota. Referencia: [CHATGPT_STREAM_LIMITS.md](CHATGPT_STREAM_LIMITS.md).
+
+| Nome / finalidade | Exemplo e padrao | Validacao / erros comuns |
+|---|---|---|
+| CHATGPT_STREAM_MAX_BYTES: trafego total por papel, incluindo tentativas | 16777216 | Inteiro entre 16384 e 134217728; stream_limit indica soma excedida, nao login expirado |
+| CHATGPT_EVENT_MAX_BYTES: evento e buffer SSE | 2097152 | Inteiro entre 1024 e 8388608; event_limit pode indicar uma linha/frame gigante mesmo com pouco trafego total |
+| CHATGPT_TEXT_MAX_BYTES: texto final unico UTF-8 | 1048576 | Inteiro entre 1024 e 4194304; versoes delta/done nao devem ser somadas novamente |
+| CHATGPT_TIMEOUT_SECONDS: duracao total da geracao do papel | 300 | Numero entre 1 e 1800; se ausente reutiliza CODEX_TIMEOUT_SECONDS por compatibilidade; runtime_limit exige revisar tempo/complexidade |
+
+Configure os valores em .env e reinicie a API. Use inteiros em bytes, sem sufixo MB/MiB. Tetos excessivos aumentam risco de consumo local; mantenha os padroes medidos antes de ajustar. As validacoes rejeitam valores fora das faixas e nao aceitam ilimitado. Nenhum desses campos deve conter token, API key ou texto de projeto. Os testes nao precisam de conta externa para validar os limites.

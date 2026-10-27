@@ -1,15 +1,17 @@
-"""Keep streamed text in memory until the response confirms completion."""
+"""Account unique text by output/content index; finalized versions replace no bytes."""
 
-from .chatgpt_http import MAX_BODY
+from .chatgpt_limits import StreamLimitExceeded
+from .config import settings
 
 
 class StreamText:
     def __init__(self):
-        self.deltas = {}
-        self.text_done = {}
-        self.items_done = {}
+        self.parts = {}
+        self.text_done = set()
+        self.items_done = set()
         self.delta_events = 0
         self.bytes = 0
+        self.max_bytes = settings.chatgpt_text_max_bytes
 
     def position(self, event, content=True):
         values = (
@@ -21,18 +23,30 @@ class StreamText:
             raise ValueError("ChatGPT sent invalid text event indices")
         return values
 
-    def text(self, value):
+    def put(self, key, value, *, delta=False):
         if not isinstance(value, str):
             raise ValueError("ChatGPT sent invalid text event data")
         try:
-            self.bytes += len(value.encode("utf-8"))
+            encoded = value.encode("utf-8")
         except UnicodeError:
             raise ValueError("ChatGPT sent invalid Unicode text") from None
-        if self.bytes > MAX_BODY:
-            raise ValueError("ChatGPT text exceeded the allowed size")
-        return value
+        previous = self.parts.get(key)
+        if not delta and previous is not None:
+            if previous != encoded:
+                raise ValueError("ChatGPT finalized text differs from its stream")
+            return
+        added = len(encoded)
+        if self.bytes + added > self.max_bytes:
+            raise StreamLimitExceeded("text", self.max_bytes)
+        if previous is None:
+            if len(self.parts) >= 128:
+                raise ValueError("ChatGPT returned too many text parts")
+            self.parts[key] = bytearray(encoded)
+        else:
+            previous.extend(encoded)
+        self.bytes += added
 
-    def add(self, event, extract):
+    def add(self, event, extract=None):
         kind = event.get("type")
         if kind in {"response.refusal.delta", "response.refusal.done"}:
             raise ValueError("ChatGPT refused the request; no text result was saved")
@@ -50,31 +64,35 @@ class StreamText:
                 key = self.position(event, content=False)
                 if key in self.items_done:
                     raise ValueError("ChatGPT sent duplicate finalized output items")
-                self.items_done[key] = self.text(
-                    extract({"response": {"status": "completed", "output": [item]}})
-                )
+                content = item.get("content")
+                if not isinstance(content, list) or not content:
+                    raise ValueError("ChatGPT returned an empty finalized message")
+                for index, part in enumerate(content):
+                    if not isinstance(part, dict) or part.get("type") != "output_text":
+                        raise ValueError("ChatGPT refused or returned non-text output")
+                    self.put((key[0], index), part.get("text"))
+                if any(k[0] == key[0] and k[1] >= len(content) for k in self.parts):
+                    raise ValueError("ChatGPT finalized message omitted text parts")
+                self.items_done.add(key)
         elif kind == "response.output_text.delta":
             key = self.position(event)
-            if key in self.text_done:
+            if key in self.text_done or (key[0],) in self.items_done:
                 raise ValueError("ChatGPT sent a text delta after finalization")
-            self.deltas.setdefault(key, []).append(self.text(event.get("delta")))
+            self.put(key, event.get("delta"), delta=True)
             self.delta_events += 1
         elif kind == "response.output_text.done":
             key = self.position(event)
             if key in self.text_done:
                 raise ValueError("ChatGPT sent duplicate finalized text")
-            self.text_done[key] = self.text(event.get("text"))
-            if key in self.deltas and "".join(self.deltas[key]) != self.text_done[key]:
-                raise ValueError("ChatGPT finalized text differs from its stream")
+            self.put(key, event.get("text"))
+            self.text_done.add(key)
 
     def completed(self):
-        if self.items_done:
-            return "".join(self.items_done[key] for key in sorted(self.items_done))
-        if self.text_done:
-            if any(key not in self.text_done for key in self.deltas):
-                raise ValueError("ChatGPT left text parts unfinished")
-            return "".join(self.text_done[key] for key in sorted(self.text_done))
-        return "".join("".join(self.deltas[key]) for key in sorted(self.deltas))
+        if self.items_done and any((key[0],) not in self.items_done for key in self.parts):
+            raise ValueError("ChatGPT left output items unfinished")
+        if self.text_done and not self.items_done and any(key not in self.text_done for key in self.parts):
+            raise ValueError("ChatGPT left text parts unfinished")
+        return b"".join(self.parts[key] for key in sorted(self.parts)).decode("utf-8")
 
     def summary(self):
-        return f"delta_events={self.delta_events}, finalized_text_parts={len(self.text_done)}, finalized_items={len(self.items_done)}"
+        return f"delta_events={self.delta_events}, finalized_text_parts={len(self.text_done)}, finalized_items={len(self.items_done)}, unique_text_bytes={self.bytes}"

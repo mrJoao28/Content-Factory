@@ -134,10 +134,11 @@ async def test_connection(body: TestRequest, request: Request):
         return {"state": "VERIFIED", "account_id": binding["account_id"], "model": binding["model"]}
 
     async def watch():
-        while not await request.is_disconnected():
+        while not cancelled.is_set():
+            if await request.is_disconnected():
+                cancelled.set()
+                raise HTTPException(499, "Text generation cancelled")
             await asyncio.sleep(0.1)
-        cancelled.set()
-        raise HTTPException(499, "Text generation cancelled")
 
     work = asyncio.create_task(asyncio.to_thread(controlled, test))
     watcher = asyncio.create_task(watch())

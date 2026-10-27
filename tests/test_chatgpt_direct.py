@@ -1585,3 +1585,253 @@ def test_streamed_text_never_bypasses_completion_errors_or_schema(connection, ou
     assert not provider.history
     if outcome == "empty":
         assert "delta_events=0" in str(raised.value)
+
+
+def test_storyboard_retry_keeps_script_checkpoints_and_renders_35_seconds(connection, client, monkeypatch):
+    from factory import chatgpt, codex
+    from factory.db import Session
+    from factory.models import ProductionJob, ScriptVersion, VideoProject
+    from factory.queue import Worker
+    from factory.schemas import Metadata, Script
+    from sqlalchemy import func, select
+    from test_chatgpt_limits import BytesStream, representative_board, representative_stream
+    from test_render import sine
+
+    _, accounts, _ = connection
+    authorize(connection)
+    monkeypatch.setattr(chatgpt, "accounts", accounts)
+    monkeypatch.setattr(settings, "ai_provider", "chatgpt")
+    monkeypatch.setattr(
+        codex.CodexProvider, "generate", lambda *args, **kwargs: pytest.fail("Codex forbidden")
+    )
+    board = representative_board()
+    compact = json.dumps(board.model_dump(exclude_defaults=True), separators=(",", ":"))
+    payload = representative_stream(compact)
+    calls = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        instructions = body["instructions"]
+        assert body["stream"] is True and body["store"] is False
+        assert "compact JSON" in instructions
+        prompt = json.loads(body["input"][0]["content"])
+        role = next(
+            role
+            for role in [
+                "Creative Director",
+                "Script Writer",
+                "Storyboard Planner",
+                "Visual Director",
+                "Animation Planner",
+                "Quality Reviewer",
+                "Publishing Assistant",
+            ]
+            if role in instructions
+        )
+        calls.append(role)
+        assert role not in {"Creative Director", "Script Writer"}
+        if role == "Storyboard Planner":
+            limits = prompt["generation_limits"]
+            assert limits["max_scenes"] == 7 and limits["target_duration_seconds"] == 35
+            assert (
+                prompt["required_json_schema"]["$defs"]["Layer"]["properties"]["keyframes"]["maxItems"] == 6
+            )
+            return httpx.Response(200, stream=BytesStream(payload))
+        result = (
+            Metadata(title="A safe discovery", description="Fixture", tags=["Original"])
+            if role == "Publishing Assistant"
+            else AgentResult(summary="Reviewed", flags=[])
+        )
+        return httpx.Response(
+            200,
+            headers={"Content-Type": "text/event-stream"},
+            stream=Fragmented(stream_body(text=result.model_dump_json())),
+        )
+
+    original = httpx.AsyncClient
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(**{**kwargs, "transport": transport}))
+    created = client.post(
+        "/projects",
+        json={"idea": "Seven scenes in a 35 second original garden adventure", "channel_id": "wondernest"},
+    ).json()
+    pid = created["id"]
+    script = Script(
+        title="A safe discovery", description="Fixture script", beats=["Explore", "Share"]
+    ).model_dump(mode="json")
+    director = AgentResult(summary="Saved director checkpoint", flags=[]).model_dump(mode="json")
+    sine(settings.storage_root / "voice35.wav", seconds=35)
+    with Session.begin() as db:
+        project = db.get(VideoProject, pid)
+        project.width, project.height = 160, 284
+        project.narration = {"path": "voice35.wav"}
+        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == pid))
+        job.checkpoint = {**job.checkpoint, "creative_director": director, "script_writer": script}
+        job_id = job.id
+    monkeypatch.setattr(settings, "chatgpt_stream_max_bytes", 2_000_000)
+    assert Worker().once()
+    failed = client.get(f"/projects/{pid}").json()
+    assert failed["status"] == "FAILED"
+    assert failed["jobs"][0]["diagnostic"]["code"] == "stream_limit"
+    assert "storyboard_planner" not in failed["jobs"][0]["checkpoint"]
+    assert failed["jobs"][0]["checkpoint"]["script_writer"] == script
+    monkeypatch.setattr(settings, "chatgpt_stream_max_bytes", 16_777_216)
+    assert client.post(f"/projects/{pid}/jobs/resume", json={}).status_code == 200
+    assert Worker().once()
+    detail = client.get(f"/projects/{pid}").json()
+    assert detail["status"] == "HUMAN_REVIEW", detail["jobs"]
+    assert len(detail["jobs"]) == 1 and detail["jobs"][0]["id"] == job_id and detail["revision"] == 1
+    cp = detail["jobs"][0]["checkpoint"]
+    assert cp["creative_director"] == director and cp["script_writer"] == script
+    assert sum(scene["duration"] for scene in cp["storyboard_planner"]["scenes"]) == 35
+    assert calls.count("Storyboard Planner") == 2
+    assert all(detail["artifacts"][0]["probe"]["checks"].values())
+    assert len(detail["artifacts"]) == 1 and detail["approved_hash"] is None
+    assert client.get(f"/projects/{pid}/media/video").status_code == 200
+    with Session() as db:
+        assert (
+            db.scalar(select(func.count()).select_from(ScriptVersion).where(ScriptVersion.project_id == pid))
+            == 1
+        )
+
+
+@pytest.mark.parametrize("failure", ["layers", "keyframes", "duration"])
+def test_generated_storyboard_limits_are_validated_then_corrected(connection, monkeypatch, failure):
+    from factory.schemas import Board
+    from test_chatgpt_limits import BytesStream, event, representative_board
+
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+    valid = representative_board().model_dump(exclude_defaults=True)
+    import copy
+
+    invalid = copy.deepcopy(valid)
+    if failure == "layers":
+        invalid["scenes"][0]["layers"].append(copy.deepcopy(invalid["scenes"][0]["layers"][0]))
+    elif failure == "keyframes":
+        invalid["scenes"][0]["layers"][0]["keyframes"].append({"time": 5.1})
+    else:
+        invalid["scenes"][0]["duration"] = 4
+    calls = []
+
+    def handler(request):
+        calls.append(json.loads(request.content))
+        text = json.dumps(invalid if len(calls) == 1 else valid, separators=(",", ":"))
+        return httpx.Response(
+            200,
+            headers={"Content-Type": "text/event-stream"},
+            stream=BytesStream(
+                event(
+                    {
+                        "type": "response.completed",
+                        "response": {
+                            "status": "completed",
+                            "output": [
+                                {
+                                    "type": "message",
+                                    "role": "assistant",
+                                    "content": [{"type": "output_text", "text": text}],
+                                }
+                            ],
+                        },
+                    }
+                )
+            ),
+        )
+
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(handler),
+    )
+    result = provider.generate("Storyboard Planner", {"duration": 35}, Board)
+    assert len(calls) == 2 and sum(s.duration for s in result.scenes) == 35
+    assert "correction" in json.loads(calls[1]["input"][0]["content"])
+
+
+def test_many_event_stream_cancellation_does_not_save_partial_board(connection):
+    from factory.schemas import Board
+    from factory.security import Cancelled
+    from test_chatgpt_limits import BytesStream, representative_board, representative_stream
+
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+    payload = representative_stream(
+        json.dumps(representative_board().model_dump(exclude_defaults=True), separators=(",", ":"))
+    )
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(lambda request: httpx.Response(200, stream=BytesStream(payload))),
+    )
+    cancelled = threading.Event()
+    with pytest.raises(Cancelled):
+        provider.generate(
+            "Storyboard Planner",
+            {"duration": 35},
+            Board,
+            emit=lambda kind: cancelled.set(),
+            cancel=cancelled.is_set,
+        )
+    assert not provider.history
+
+
+def test_direct_timeout_setting_overrides_compatibility_timeout(connection, monkeypatch):
+    from factory.chatgpt_limits import StreamTimeout
+
+    monkeypatch.setattr(settings, "chatgpt_timeout_seconds", 0.15)
+    monkeypatch.setattr(settings, "codex_timeout_seconds", 300)
+    provider = provider_for(connection, delay=2)
+    with pytest.raises(StreamTimeout):
+        provider.generate("Creative Director", {}, AgentResult)
+    assert not provider.history
+
+
+def test_many_event_storyboard_eof_never_saves_partial_result(connection):
+    from factory.chatgpt_http import ChatGPTTransient
+    from test_chatgpt_limits import BytesStream, representative_board, representative_stream
+
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+    payload = representative_stream(
+        json.dumps(representative_board().model_dump(exclude_defaults=True), separators=(",", ":"))
+    )
+    payload = payload[: payload.rfind(b'data: {"type":"response.completed"')]
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(lambda request: httpx.Response(200, stream=BytesStream(payload))),
+    )
+    with pytest.raises(ChatGPTTransient) as raised:
+        asyncio.run(provider._stream({}, "fixture-bearer", lambda kind: None))
+    assert raised.value.diagnostic["error_code"] == "missing_completion"
+    assert provider.stream_budget.traffic > 2_000_000
+    assert not provider.history
+
+
+def test_stream_traffic_budget_is_shared_across_json_repair_requests(connection, monkeypatch):
+    from factory.chatgpt_limits import StreamLimitExceeded
+
+    _, accounts, _ = connection
+    account_id = authorize(connection)
+    invalid, valid = stream_body(text="not-json"), stream_body()
+    monkeypatch.setattr(settings, "chatgpt_stream_max_bytes", len(invalid) + len(valid) - 1)
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(
+            200,
+            headers={"Content-Type": "text/event-stream"},
+            stream=Fragmented(invalid if len(calls) == 1 else valid),
+        )
+
+    provider = ChatGPTProvider(
+        accounts,
+        {"provider": "chatgpt", "account_id": account_id, "model": "example-model"},
+        httpx.MockTransport(handler),
+    )
+    with pytest.raises(StreamLimitExceeded) as raised:
+        provider.generate("Creative Director", {}, AgentResult)
+    assert len(calls) == 2 and raised.value.code == "stream_limit"
+    assert not provider.history

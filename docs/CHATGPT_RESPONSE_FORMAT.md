@@ -54,3 +54,5 @@ Diagnostico final fornecido pelo proprietario, sem conteudo gerado ou credenciai
 O request ID continua ausente; nao ha evidencia para atribuir a remocao do cabecalho a um intermediario especifico.
 
 Validacao final: 152 testes Python passaram; Ruff, TypeScript, 6 testes Vitest, 7 testes Playwright e build Next.js passaram. Veja VALIDATION.md. A tentativa de criar branch foi bloqueada por .git somente leitura; a correcao permanece no working tree, sem commits/push/PR.
+
+Para falhas de tamanho durante STORYBOARDING, veja [CHATGPT_STREAM_LIMITS.md](CHATGPT_STREAM_LIMITS.md): trafego, evento/buffer, texto unico e tempo possuem orcamentos separados; uma mensagem de tamanho nao indica falha de autenticacao.

@@ -15,7 +15,8 @@ TOKEN = ISSUER + "/api/accounts/oauth/token"
 DISCOVERY = ISSUER + "/.well-known/openid-configuration"
 SCOPES = "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct"
 REQUIRED_SCOPES = {"chatgpt.tokens.use.direct", "resource.invoke", "offline_access"}
-MAX_BODY = 2_000_000
+HTTP_MAX_BODY_BYTES = 2_000_000  # Bounded OAuth/catalog/error JSON, not streaming inference.
+MAX_BODY = HTTP_MAX_BODY_BYTES  # Compatibility for existing non-stream consumers.
 
 
 class ChatGPTError(ConfigurationRequired):

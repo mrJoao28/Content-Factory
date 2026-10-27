@@ -1,5 +1,16 @@
 # Validacao e pendencias
 
+## Limites de streaming e storyboard: validacao final
+
+- Base 73a7764. Consulta de producao somente leitura confirmou o job c01a3bd3-0030-40ea-b5f2-68cc6f72e4d2 parado em STORYBOARDING com alvo 35s e creative_director/script_writer preservados. O corpo da resposta nao foi retido e sua complexidade exata nao foi presumida. Detalhes em [CHATGPT_STREAM_LIMITS.md](CHATGPT_STREAM_LIMITS.md).
+- Reproducao autoral: 7 cenas, 35s, 56 camadas, 336 keyframes; JSON compacto 18.968 bytes, SSE 2.691.684 bytes com 18.968 deltas. O parser novo contabiliza 18.968 bytes de texto unico, sem somar as versoes finais. Pico tracemalloc de parse 191.000 bytes, excluindo a fixture previamente alocada e sem equivaler a RSS total.
+- O teste real do pipeline reproduz a falha com teto de 2 MB, verifica os checkpoints, aplica Resume ao mesmo job/revisao e produz MP4 real de 35s. Confirma uma ScriptVersion, um artefato, duration/checks via FFprobe e HUMAN_REVIEW sem aprovacao automatica. Apenas HTTP externo e controlado; audio de teste conhecido e renderer/SQLite/schemas/rotas reais.
+- Execucao final: **173 testes Python passaram em 154.14s**, sem skips (`python -m pytest -q --durations=5 -o faulthandler_timeout=60 --basetemp=data/storyboard-budget-verified`). A prova de retomada/render de 35s levou 10.70s na suite final. Cobertura inclui muitos eventos, limites de frame/buffer/texto/trafego, configuracao finita, tentativas compartilhando trafego, complexidade/duracao, EOF, timeout e cancelamento.
+- **Ruff passou**, TypeScript strict passou, Vitest **6 passaram**, Next.js build passou e Playwright **7 passaram** com API/frontend reais em portas isoladas.
+- Uma execucao anterior foi interrompida por travamento na finalizacao do monitor de desconexao do teste de conexao. O monitor agora observa tambem o evento de encerramento, evitando depender somente do cancelamento de task. Somente os processos identificados daquela execucao pytest foram encerrados; servidores do proprietario foram preservados. A suite final acima passou apos a correcao.
+- O banco, modelo, conta e checkpoints do proprietario nao foram modificados. Nenhuma geracao real de storyboard pela conta foi iniciada pelo agente nesta entrega; a retomada pelo proprietario permanece pendente. Nenhuma publicacao foi realizada.
+- Branch fix/storyboard-stream-budgets tentada e bloqueada por .git somente leitura; nenhum commit, push ou PR foi criado. Alteracoes permanecem locais.
+
 ## SSE e formato ChatGPT: validacao final
 
 - Base f1b770d; detalhes em [CHATGPT_RESPONSE_FORMAT.md](CHATGPT_RESPONSE_FORMAT.md). O proprietario reproduziu HTTP 200 sem Content-Type, primeiro rejeitado como SSE-like; apos correcao do cabecalho, o terminal nao fornecia texto no campo esperado. O parser agora reconhece o stream por conteudo apenas quando o cabecalho falta e reune texto dos eventos antes da confirmacao terminal.

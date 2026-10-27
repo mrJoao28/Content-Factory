@@ -109,9 +109,9 @@ def safe_error_details(body):
     return code, message
 
 
-async def sniff_missing_content_type(response):
+async def sniff_missing_content_type(response, chunks=None):
     """Peek bounded bytes, then replay them. Missing headers never imply success."""
-    iterator = response.aiter_bytes().__aiter__()
+    iterator = (chunks if chunks is not None else response.aiter_bytes()).__aiter__()
     held, prefix, matched = [], bytearray(), False
     markers = (b"data:", b"event:", b":", b"id:", b"retry:")
     async for chunk in iterator:

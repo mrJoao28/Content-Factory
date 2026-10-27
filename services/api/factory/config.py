@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     default_timezone: str = "America/Manaus"
     ai_provider: Literal["chatgpt", "codex"] | None = None
     chatgpt_login_timeout_seconds: int = Field(default=300, ge=1, le=600)
+    chatgpt_stream_max_bytes: int = Field(default=16_777_216, ge=16_384, le=134_217_728)
+    chatgpt_event_max_bytes: int = Field(default=2_097_152, ge=1024, le=8_388_608)
+    chatgpt_text_max_bytes: int = Field(default=1_048_576, ge=1024, le=4_194_304)
+    chatgpt_timeout_seconds: float | None = Field(default=None, ge=1, le=1800)
     codex_auth_mode: Literal["chatgpt"] = "chatgpt"
     codex_provider: Literal["auto", "cli", "sdk"] = "auto"
     codex_path: str = "codex"
