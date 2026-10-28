@@ -94,3 +94,6 @@ app.include_router(routes_library.router)
 app.include_router(routes_chatgpt.router)
 app.include_router(routes_system.router)
 app.include_router(routes_visual.router)
+from . import routes_external_render  # noqa: E402
+
+app.include_router(routes_external_render.router)

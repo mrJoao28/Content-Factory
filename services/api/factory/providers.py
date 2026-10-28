@@ -166,6 +166,7 @@ def job_diagnostics(db, job):
             .limit(1)
         )
     actions = {
+        "WAITING_FOR_EXTERNAL_RENDER": "Storyboard/audio prepared. Export the package and render interactively in Colab, then import in Review studio. External progress is shown only in the notebook; returning to local render requires an explicit action.",
         "WAITING_FOR_AUTH": "Reconnect this production's account in Settings, then Resume.",
         "WAITING_FOR_MODEL": "Choose a provider and an available model in Settings, then apply the selection explicitly.",
         "WAITING_FOR_LIMIT": "Check plan usage and resume later; no automatic account or billing switch.",

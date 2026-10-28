@@ -34,7 +34,7 @@ def produce(job_id, owner, cancel=lambda: False):
         artifact = db.scalar(
             select(RenderArtifact).where(
                 RenderArtifact.project_id == project_id, RenderArtifact.revision == revision
-            )
+            ).order_by(RenderArtifact.created_at.desc()).limit(1)
         )
         if artifact:
             movie = safe_path(settings.output_dir, artifact.path)
@@ -47,7 +47,17 @@ def produce(job_id, owner, cancel=lambda: False):
                 restored = "APPROVED" if project.approved_hash == artifact.sha256 else "HUMAN_REVIEW"
                 checkpoint(job_id, owner, restored)
                 return
-        if is_3d:
+        if is_3d and job.checkpoint.get("_render_prepared"):
+            from .external_render import prepared
+            _, board, audio = prepared(project, job)
+            script = Script.model_validate(project.script)
+            metadata = Metadata.model_validate(project.metadata_json)
+            reviewer = AgentResult.model_validate(job.checkpoint.get("quality_reviewer") or {
+                "summary": "No saved AI quality review", "flags": ["AI quality review absent; verify content manually"]})
+            db.close()  # Do not retain a SQLite read transaction during a long resumed render.
+            render_prepared(project_id, revision, job_id, owner, board, audio, script, reviewer, metadata, {}, cancel)
+            return
+        if is_3d and visual.execution_location == "local":
             from .visual_render import blender_info
             blender_info()
         context = {
@@ -235,6 +245,22 @@ def produce(job_id, owner, cancel=lambda: False):
         current = db.get(VideoProject, project_id)
         current.metadata_json = metadata.model_dump()
         current.narration = {**current.narration, "generated_path": str(audio)}
+    checkpoint(job_id, owner, "AUDIO_GENERATION", "_render_prepared", True)
+    render_prepared(project_id, revision, job_id, owner, board, audio, script, reviewer, metadata, asset_map, cancel)
+
+
+def render_prepared(project_id, revision, job_id, owner, board, audio, script, reviewer, metadata, asset_map, cancel):
+    with Session() as db:
+        project = db.get(VideoProject, project_id)
+        visual = VisualSettings.model_validate(project.visual_config)
+    is_3d = visual.engine == "blender_3d"
+    total = board.duration if is_3d else sum(scene.duration for scene in board.scenes)
+    folder = settings.output_dir / project_id / str(revision)
+    folder.mkdir(parents=True, exist_ok=True)
+    if is_3d and visual.execution_location == "colab":
+        checkpoint(job_id, owner, "WAITING_FOR_EXTERNAL_RENDER")
+        event(project_id, "WAITING_FOR_EXTERNAL_RENDER", "Storyboard and measured audio prepared. Export package, render in the notebook, then import for human review. No external progress is received here.")
+        return
     checkpoint(job_id, owner, "RENDERING")
     movie = folder / "video.mp4"
     started = time.monotonic()

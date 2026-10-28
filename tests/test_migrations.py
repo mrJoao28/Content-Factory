@@ -63,6 +63,8 @@ def test_frozen_initial_schema_executes_on_real_sqlite(tmp_path):
         for statement in statements:
             db.execute(statement)
         for table in Base.metadata.tables.values():
+            if table.name == "external_render_exports":
+                continue  # Added by 0003, verified by the upgrade/downgrade test.
             columns = {r[1] for r in db.execute(f'PRAGMA table_info("{table.name}")')}
             # The frozen initial migration predates visual_config; subsequent revisions add it.
             expected = set(table.columns.keys()) - ({"visual_config"} if table.name == "video_projects" else set())
