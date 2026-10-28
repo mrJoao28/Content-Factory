@@ -404,6 +404,16 @@ def update(scene, actors, props, particles, shot, t):
             particle.location = props["magic_egg"].location+Vector((.4*math.cos(angle), .4*math.sin(angle), .1+.5*((i*.17+t*.2) % 1)))
 
 
+def frame_range(cfg, shot_duration, scene_offset):
+    """Bound a shot by the declared timeline/batch, never by an old fixed frame cap."""
+    total = round(cfg['board']['duration']*cfg['fps'])
+    first = max(1, int(cfg.get('frame_start', 1)))
+    last = min(total, int(cfg.get('frame_end', total)))
+    start = max(0, first-scene_offset-1)
+    end = min(round(shot_duration*cfg['fps']), last-scene_offset)
+    return range(start, max(start, end))
+
+
 def main():
     manifest_path = Path(sys.argv[sys.argv.index("--")+1]).resolve()
     cfg = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -414,9 +424,8 @@ def main():
     scene_offset = 0
     for shot in board["scenes"]:
         count = round(shot["duration"]*cfg["fps"])
-        required = [i for i in range(count)
-                    if cfg.get("frame_start", 1) <= scene_offset+i+1 <= cfg.get("frame_end", 18000)
-                    and not (output/f"{scene_offset+i+1:06}.png").is_file()]
+        required = [i for i in frame_range(cfg, shot['duration'], scene_offset)
+                    if not (output/f"{scene_offset+i+1:06}.png").is_file()]
         if not required:
             scene_offset += count
             continue
