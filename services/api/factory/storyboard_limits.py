@@ -7,7 +7,7 @@ from .schemas import Board
 
 def constraints(context):
     duration = float(context.get("duration", 35))
-    if not math.isfinite(duration) or not 0 < duration <= 600:
+    if not math.isfinite(duration) or not 0 < duration <= 3600:
         raise ValueError("Storyboard target duration is invalid")
     return {
         "target_duration_seconds": duration,
@@ -22,7 +22,7 @@ def generation_schema(response_type, context):
     schema = response_type.model_json_schema()
     from .visual_schema import VisualBoard
     if response_type is VisualBoard:
-        return schema, {"target_duration_seconds": context["duration"], "max_scenes": 60,
+        return schema, {"target_duration_seconds": context["duration"], "max_scenes": min(720, max(1, math.ceil(context['duration']/5))),
                         "instructions": "Compact JSON. Scene durations must sum exactly to duration. Use only the supplied catalog and selected character/environment. At most 2 actors, 3 props, 24 actions and 6 camera keys per scene. Ground Z=0. No overlapping actions per actor. No code. Narration must fit the scene. Camera uses metres Z-up; characters face -Y at heading 0. Reuse asset versions."}
     if response_type is not Board:
         return schema, None
@@ -39,14 +39,16 @@ def validate_generated(result, context):
     if isinstance(result, VisualBoard):
         result.validate_project(context["duration"], context.get("fps", 24))
         selection = context.get("visual_selection", {})
+        musical = context.get('music_plan', {})
+        cast = musical.get('characters') or [selection.get('character')]
+        environment = musical.get('environment') or selection.get('environment')
         for scene in result.scenes:
-            if context.get("channel") == "wondernest" and selection.get("character") not in {
-                actor.character_id for actor in scene.characters
-            }:
+            if context.get("channel") == "wondernest" and not set(cast).intersection(
+                actor.character_id for actor in scene.characters):
                 raise ValueError("Children's 3D scenes must contain the selected character")
-            if selection.get("environment") and scene.environment != selection["environment"]:
+            if environment and scene.environment != environment:
                 raise ValueError("Use the selected environment")
-            if any(actor.character_id != selection.get("character", actor.character_id) for actor in scene.characters):
+            if any(actor.character_id not in cast for actor in scene.characters):
                 raise ValueError("Use the selected character")
         return
     if not isinstance(result, Board):

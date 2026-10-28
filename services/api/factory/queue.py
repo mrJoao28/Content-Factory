@@ -20,6 +20,7 @@ ACTIVE = {
     "TECHNICAL_VALIDATION",
 }
 WAITING = {
+    "WAITING_FOR_MUSIC",
     "WAITING_FOR_EXTERNAL_RENDER",
     "WAITING_FOR_AUTH",
     "WAITING_FOR_ASSETS",
@@ -198,11 +199,15 @@ class Worker:
                     else type(exc).__name__ + ": check local tool configuration"
                 )
                 selection = job.checkpoint.get("_ai_selection") or {}
+                music_operation = job.checkpoint.get('_last_music_operation', {})
+                actual_provider = selection.get('provider')
+                if music_operation.get('status') == 'started' and music_operation.get('kind') not in {'compose', 'regenerate'}:
+                    actual_provider = 'elevenlabs_music' if music_operation.get('kind') == 'sing' else 'local_audio'
                 job.checkpoint = {
                     **job.checkpoint,
                     "_failure": {
                         "stage": interrupted_stage,
-                        "provider": selection.get("provider"),
+                        "provider": actual_provider,
                         "code": getattr(
                             exc,
                             "code",

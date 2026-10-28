@@ -96,6 +96,12 @@ def create_project(body: ProjectCreate):
         db.add(project)
         db.flush()
         enqueue(db, project)
+        if body.musical_format:
+            project.music_state = {'editorial_format': body.musical_format}
+            project.status = 'WAITING_FOR_MUSIC'
+            job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == project.id,
+                                                       ProductionJob.revision == project.revision))
+            job.state = project.status
         result = serialize(project)
     event(project.id, "DRAFT", "Idea accepted and queued")
     return result
@@ -149,6 +155,17 @@ def edit_project(project_id: str, body: ProjectEdit):
         ):
             job.state = "CANCELLED"
         project.revision += 1
+        from .music import supersede_exports
+        supersede_exports(db, project_id)
+        # A storyboard/metadata edit may reuse the exact unchanged mix, explicitly rebound
+        # to this revision. A script edit requires new timing validation in Music Studio.
+        if project.narration.get('final'):
+            reference = dict(project.narration['final'])
+            if body.script:
+                project.narration = {k: v for k, v in project.narration.items() if k != 'final'}
+            else:
+                reference['revision'] = project.revision
+                project.narration = {**project.narration, 'final': reference}
         project.approved_hash = None
         project.status = "DRAFT"
         return serialize(project)
@@ -166,6 +183,8 @@ def control_job(project_id: str, action: str):
         )
         if action == "resume":
             no_running_job(db, project_id)
+            if (project.music_plan or project.music_state.get('editorial_format')) and not project.narration.get('final'):
+                raise HTTPException(409, 'Finish and validate the Music Studio mix before resuming')
             if job and job.state == "WAITING_FOR_EXTERNAL_RENDER":
                 raise HTTPException(409, "Waiting for assisted external render: export/import the package or explicitly return to local rendering")
             if not job:
@@ -185,6 +204,7 @@ def control_job(project_id: str, action: str):
             if not job or job.state not in ACTIVE | WAITING:
                 raise HTTPException(409, "No controllable job")
             job.state = "PAUSED" if action == "pause" else "CANCELLED"
+            job.checkpoint = {k: v for k, v in job.checkpoint.items() if k != '_music_operation'}
             project.status = job.state
             if action == "cancel":
                 from .models import ExternalRenderExport

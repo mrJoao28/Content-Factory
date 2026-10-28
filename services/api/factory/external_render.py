@@ -37,7 +37,8 @@ def prepared(project, job):
     if visual.engine != 'blender_3d':
         raise ValueError('External rendering requires a Blender 3D project')
     board = VisualBoard.model_validate(project.storyboard).validate_project(project.target_duration, project.fps)
-    candidate = (job.checkpoint.get('audio') if job else None) or project.narration.get('generated_path')
+    from .final_audio import resolve
+    candidate = resolve(project, job)
     if not candidate:
         raise ValueError('Prepare storyboard and measured narration before exporting')
     audio = Path(candidate).resolve()

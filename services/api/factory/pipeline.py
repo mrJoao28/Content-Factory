@@ -16,6 +16,7 @@ from .models import (
     VideoProject,
     VideoScene,
 )
+from .music_animation import plan_board as musical_board
 from .providers import get_provider, job_selection, validate_selection
 from .queue import checkpoint, event
 from .render import probe, render, validate_video
@@ -30,6 +31,12 @@ def produce(job_id, owner, cancel=lambda: False):
         project = db.get(VideoProject, job.project_id)
         project_id, revision = project.id, project.revision
         visual = VisualSettings.model_validate(project.visual_config)
+        operation = job.checkpoint.get('_music_operation')
+        if operation:
+            from .music import execute
+            db.close()
+            execute(job_id, owner, operation, cancel)
+            return
         is_3d = visual.engine == "blender_3d"
         artifact = db.scalar(
             select(RenderArtifact).where(
@@ -115,6 +122,10 @@ def produce(job_id, owner, cancel=lambda: False):
             from .storyboard_limits import validate_generated
             if is_3d:
                 validate_generated(result, context)
+                if response_type is VisualBoard and context.get('music_plan'):
+                    from .music_animation import synchronize
+                    with Session() as music_db:
+                        result = synchronize(music_db.get(VideoProject, project_id), result)
             with provider.persistence_guard():
                 sources = {**saved.get("_ai_step_sources", {}), key: selection}
                 checkpoint(job_id, owner, stage, "_ai_step_sources", sources)
@@ -150,15 +161,35 @@ def produce(job_id, owner, cancel=lambda: False):
         ):
             db.add(ScriptVersion(project_id=project_id, revision=revision, content=current.script))
     board_type = VisualBoard if is_3d else Board
+    with Session() as db:
+        musical = db.get(VideoProject, project_id)
+        if musical.music_plan:
+            from .final_audio import resolve
+            from .music import MusicRequired
+            try:
+                resolve(musical)
+            except ValueError as exc:
+                raise MusicRequired(str(exc)) from exc
+            context['music_plan'] = musical.music_plan
+            from .music import timeline
+            context['music_timeline'] = timeline(musical)
+            context['music_instructions'] = 'Audio is already finalized. Do not generate narration audio. Scenes must follow the measured musical segments and their actions. Use supplied supported actions only.'
     checkpoint(job_id, owner, "STORYBOARDING")
     board = (
         board_type.model_validate(manual_board)
         if manual_board
+        else musical_board(project_id, job_id, owner, provider, selection, context, saved, cancel)
+        if context.get('music_plan') and is_3d
         else agent("Storyboard Planner", board_type, "STORYBOARDING")
     )
     if is_3d:
         from .storyboard_limits import validate_generated
         validate_generated(board, context)
+        with Session() as db:
+            musical = db.get(VideoProject, project_id)
+            if musical.music_plan:
+                from .music_animation import synchronize
+                board = synchronize(musical, board)
     total = sum(s.duration for s in board.scenes)
     if abs(total - context["duration"]) > 1:
         raise ValueError(f"Storyboard duration {total:.1f}s differs from target {context['duration']}s")
@@ -218,7 +249,11 @@ def produce(job_id, owner, cancel=lambda: False):
     folder.mkdir(parents=True, exist_ok=True)
     with Session() as db:
         narration = db.get(VideoProject, project_id).narration
-    if narration.get("path"):
+    if narration.get('final'):
+        from .final_audio import resolve
+        with Session() as db:
+            audio = resolve(db.get(VideoProject, project_id))
+    elif narration.get("path"):
         audio = safe_path(settings.storage_root, narration["path"])
         measured = float(probe(audio)["format"]["duration"])
         if abs(measured - total) > 1:
@@ -232,7 +267,7 @@ def produce(job_id, owner, cancel=lambda: False):
                 current.storyboard = board.model_dump(mode="json")
         else:
             audio = Piper().scenes(board, folder / "audio", cancel=cancel)
-    if narration.get("mix"):
+    if narration.get("mix") and not narration.get('final'):
         mix = AudioMix.model_validate(narration["mix"])
         audio = mix_tracks(audio, folder / "mixed.wav", total, mix, asset_map)
     checkpoint(job_id, owner, "AUDIO_GENERATION", "audio", str(audio))
@@ -245,6 +280,8 @@ def produce(job_id, owner, cancel=lambda: False):
         current = db.get(VideoProject, project_id)
         current.metadata_json = metadata.model_dump()
         current.narration = {**current.narration, "generated_path": str(audio)}
+        from .final_audio import resolve
+        audio = resolve(current)
     checkpoint(job_id, owner, "AUDIO_GENERATION", "_render_prepared", True)
     render_prepared(project_id, revision, job_id, owner, board, audio, script, reviewer, metadata, asset_map, cancel)
 

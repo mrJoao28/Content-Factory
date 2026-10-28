@@ -59,7 +59,7 @@ class Vault:
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _path(self, name):
-        if name not in {"google", "youtube", "tiktok", "chatgpt"}:
+        if name not in {"google", "youtube", "tiktok", "chatgpt", "elevenlabs_music"}:
             raise ValueError("Unknown credential slot")
         return self.root / (name + ".bin")
 
