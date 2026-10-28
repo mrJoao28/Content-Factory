@@ -4,13 +4,18 @@ Base inspecionada: `ae1ae8f087c33292d185848b659fc50e18c558ec`.
 Branch: `feat/children-music-studio`. Checkout isolado:
 `C:/Users/joaof/Content Factory Music`. A instalação original permaneceu na mesma
 revisão e com as alterações locais de `next-env.d.ts`/egg-info preservadas.
+Durante o trabalho, `main` avançou para `bd1d56158c80a6261e1b6c327be0ce1c533d975b`.
+A mudança era no link de abertura do notebook. Ela foi conciliada nesta branch,
+preservando metadados e usando o link da nova versão revisada. Nenhuma célula de
+código remota foi descartada. A branch musical não foi integrada automaticamente à main.
 
 ## O que foi executado
 
 - Instalação limpa do frontend com o lockfile existente: `npm ci --no-audit --no-fund`.
-- Suíte completa Python durante o desenvolvimento: **237 passaram, 4 pulados**
-  (684,78 s). Depois houve verificações dirigidas dos ajustes finais de cancelamento,
-  histórico, mixagem, schemas e Piper. Os testes não usam a conta ChatGPT real.
+- Última suíte completa Python: **240 passaram, 4 pulados** (380,40 s), mais uma
+  regressão dirigida adicional de preservação de histórico publicada depois da coleta
+  dessa execução. Antes disso, a suíte completa também passou com 237 testes.
+  Os testes não usam a conta ChatGPT real.
 - Verificação dirigida de áudio/Codex e Music Studio: **18 passaram, 1 pulado**.
 - TypeScript strict/typecheck, **7 testes Vitest**, build de produção Next.js.
 - **11 testes Playwright**, usando API FastAPI e frontend reais em 127.0.0.1:8001/3001,
@@ -20,6 +25,8 @@ revisão e com as alterações locais de `next-env.d.ts`/egg-info preservadas.
   continuam cobertos. Os processos da instalação em uso não foram reiniciados.
 - Notebook validado com nbformat e todas as células Python compiladas. Isso não
   equivale a execução no runtime Colab.
+- Os quatro skips da suíte padrão são opt-ins de testes Blender. O round-trip
+  musical foi executado separadamente com o executável explícito e passou.
 - Plano original de 35 s validado contra Pydantic: `examples/music/helping-hands.json`.
   É planejamento/letra, sem afirmar que existe uma gravação cantada correspondente.
 - Montagem de **620 s** em segmentos de 300 + 300 + 20 s, com arquivos PCM reais,
@@ -66,7 +73,7 @@ output/music-evidence/0db9e867-ad2b-4ed2-a974-83a7c526c449/
 
 O campo genérico `origin: assisted-notebook` do relatório é produzido pelo runner
 portável; nesta verificação ele foi executado **localmente no Windows**, não no
-Google Colab. A thumbnail foi inspecionada, mas a resolução/duração não permitem
+  Google Colab. Frames do início, meio e fim foram inspecionados, mas a resolução/duração não permitem
 declarar acabamento artístico, atuação ou coreografia de produção final.
 
 Para reproduzir, use os comandos em [MUSIC_STUDIO.md](MUSIC_STUDIO.md). Cada execução

@@ -4,6 +4,7 @@ Produção musical infantil: consulte [Music Studio — guia em português](docs
 para planejar canções originais, importar/gerar áudio, validar a mixagem e renderizar
 com Blender/Colab. Canto automático é uma integração opcional separada do login textual;
 a demonstração vocal depende de uma canção original ou serviço configurado/autorizado.
+Resultados e limitações verificadas: [MUSIC_VALIDATION.md](docs/MUSIC_VALIDATION.md).
 
 Produção Blender 3D local agora tem um motor explícito por projeto, preservando o
 compositor 2D/2.5D. Leia [configuração e estado da validação 3D](docs/LOCAL_3D.md).
