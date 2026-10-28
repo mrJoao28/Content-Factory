@@ -1,6 +1,7 @@
 """Finite interactive rendering, independent of FastAPI, SQLite and credentials."""
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -10,7 +11,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from .archive import atomic_json, identity, pack, sha, unpack
+from .archive import atomic_json, identity, pack, sha, source_sha, unpack
 from .contract import InputPackage, ResultPackage
 
 
@@ -60,7 +61,7 @@ def load_package(archive, destination, *, trusted_commit, template):
     if raw.stat().st_size > 2*1024**2:
         raise ValueError('Manifest exceeds 2 MiB')
     package = InputPackage.model_validate_json(raw.read_bytes())
-    if package.render_commit != trusted_commit or package.template_sha256 != sha(template):
+    if package.render_commit != trusted_commit or package.template_sha256 != source_sha(template):
         raise ValueError('Package requires a different trusted render release. Explicitly load its reviewed repository commit first')
     audio = Path(destination, package.audio_path)
     if audio.stat().st_size != package.audio.size or sha(audio) != package.audio.sha256:
@@ -83,7 +84,7 @@ class Renderer:
         version = subprocess.run([str(blender), '--version'], capture_output=True, timeout=30, check=True).stdout.decode().splitlines()[0]
         if not (version.startswith('Blender 4.5.') or version.startswith('Blender 5.2.')):
             raise ValueError('Unsupported Blender release; use the pinned notebook version')
-        if sha(template) != package.template_sha256:
+        if source_sha(template) != package.template_sha256:
             raise ValueError('Trusted template differs from the exported release')
         Path(work).mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=work) as temporary:
@@ -91,9 +92,16 @@ class Renderer:
             execute([blender, '--background', '--factory-startup', '--disable-autoexec', '--python-exit-code', 1,
                      '--python', self.template.with_name('cycles_devices.py'), '--', backend, device_file], timeout=60)
             device_identity = json.loads(device_file.read_text())
+        if backend != 'CPU' and shutil.which('nvidia-smi'):
+            driver = subprocess.run(['nvidia-smi', '--query-gpu=driver_version', '--format=csv,noheader'],
+                                    capture_output=True, timeout=20, check=False).stdout.decode(errors='replace')
+            device_identity['driver_versions'] = sorted({line for line in driver.splitlines()
+                                                         if re.fullmatch(r'[0-9.]{1,40}', line)})
         self.config = {'input': identity(package.model_dump(mode='json')), 'blender': version,
                        'backend': backend, 'engine': 'CYCLES', 'threads': threads,
-                       'template': sha(template), 'profile': package.profile.model_dump(), 'device': device_identity}
+                       'template': source_sha(template), 'profile': package.profile.model_dump(), 'device': device_identity}
+        # Export IDs correlate transfers; identical semantic inputs may reuse compatible frames.
+        self.config["input"] = identity({k: v for k, v in package.model_dump(mode="json").items() if k != "export_id"})
         self.cache_id = identity(self.config)
         self.folder = Path(work)/self.cache_id
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -195,7 +203,9 @@ class Renderer:
                     if not 1 <= n <= self.total or sha(frame) != data['frames'][name] or not valid_frame(frame, self.package.profile.width, self.package.profile.height):
                         raise ValueError('Corrupt checkpoint frame')
                 for name in names:
-                    shutil.copyfile(Path(temp)/name, self.folder/name)
+                    pending = self.folder/(name+'.partial')
+                    shutil.copyfile(Path(temp)/name, pending)
+                    pending.replace(self.folder/name)
             self.report = data.get('device')
         self.reused = len(self.frames())
         return self.reused
@@ -204,11 +214,16 @@ class Renderer:
         if not 1 <= batch_size <= 120:
             raise ValueError('Batch size outside 1–120')
         deadline = time.monotonic()+self.timeout
+        configured_timeout = self.timeout
         for start in range(1, self.total+1, batch_size):
             if time.monotonic() >= deadline:
                 raise TimeoutError('Interactive execution time limit reached; restore checkpoints in a later authorized session')
             end = min(self.total, start+batch_size-1)
-            progress(self.batch(start, end, cancel=cancel))
+            self.timeout = min(configured_timeout, max(.1, deadline-time.monotonic()))
+            try:
+                progress(self.batch(start, end, cancel=cancel))
+            finally:
+                self.timeout = configured_timeout
             if persistent:
                 self.save_checkpoint(persistent, range(start, end+1))
 

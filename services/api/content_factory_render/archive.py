@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 import stat
+import struct
 import zipfile
 from pathlib import Path
 
@@ -23,6 +24,11 @@ def identity(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
 
 
+def source_sha(path):
+    """Git text checkout CRLF/LF differences must not break Windows → Linux portability."""
+    return hashlib.sha256(Path(path).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+
+
 def atomic_json(path, value):
     path = Path(path)
     temporary = path.with_suffix('.partial')
@@ -35,6 +41,17 @@ def unpack(source, destination, *, allowed=None):
     source, destination = Path(source), Path(destination)
     if source.stat().st_size > MAX_ZIP:
         raise ValueError('ZIP exceeds the 256 MiB transport limit')
+    # Check EOCD before ZipFile allocates one Python object per central-directory entry.
+    with source.open('rb') as stream:
+        stream.seek(max(0, source.stat().st_size-65557))
+        tail = stream.read(65557)
+    position = tail.rfind(b'PK\x05\x06')
+    if position < 0 or len(tail)-position < 22:
+        raise ValueError('Invalid ZIP directory')
+    _, disk, start_disk, entries_disk, entries_total, directory_size, _, comment = struct.unpack_from('<4s4H2LH', tail, position)
+    if (disk or start_disk or entries_disk != entries_total or not 1 <= entries_total <= MAX_FILES
+            or directory_size > 512*1024 or position+22+comment != len(tail)):
+        raise ValueError('ZIP directory exceeds limits or uses unsupported volumes/ZIP64')
     try:
         with zipfile.ZipFile(source) as archive:
             entries = archive.infolist()
@@ -45,9 +62,10 @@ def unpack(source, destination, *, allowed=None):
                 name = entry.filename
                 parts = name.split('/')
                 mode = entry.external_attr >> 16
-                if (not re.fullmatch(r'[A-Za-z0-9_./-]+', name) or any(p in {'', '.', '..'} for p in parts)
+                if (entry.orig_filename != name or not re.fullmatch(r'[A-Za-z0-9_./-]+', name) or any(p in {'', '.', '..'} for p in parts)
                         or name.casefold() in names or (mode and stat.S_IFMT(mode) not in {0, stat.S_IFREG})
-                        or entry.flag_bits & 1 or (allowed is not None and name not in allowed)):
+                        or entry.flag_bits & 1 or entry.compress_type not in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}
+                        or (allowed is not None and name not in allowed)):
                     raise ValueError('ZIP contains an unsafe, ambiguous or unexpected entry')
                 names.add(name.casefold())
                 total += entry.file_size
