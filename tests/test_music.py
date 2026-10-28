@@ -42,6 +42,10 @@ def save(client, project, data=None, revision=None, **kwargs):
 
 
 def test_variable_duration_and_markers():
+    from factory.schemas import ProjectCreate
+    created = ProjectCreate(idea='A 90-second episode with two 35-second songs and 20 seconds of dialogue',
+        target_duration=90, musical_format='musical_episode', visual={'engine': 'blender_3d'})
+    assert created.target_duration == 90
     value = plan(35)
     value['segments'] *= 2
     value['segments'][1] = copy.deepcopy(value['segments'][1])
@@ -176,6 +180,7 @@ def test_secret_validation_does_not_echo_credentials(client):
 def test_singing_cancels_while_waiting_for_response(monkeypatch, tmp_path):
     import asyncio
     import time
+
     from factory.music_audio import sing
     monkeypatch.setattr('factory.music_audio.Vault.get', lambda *_: {'api_key': 'private-test'})
     async def handler(request):
@@ -323,6 +328,21 @@ def test_real_blender_musical_round_trip(client, musical, tmp_path):
         template=TEMPLATE, ffmpeg=ffmpeg(), backend='CPU', threads=1, timeout=600, disk_mb=128)
     renderer.render(batch_size=12, persistent=tmp_path/'drive')
     result = renderer.finish(tmp_path/'result.zip')
+    # AAC is lossy, but the MP4 must contain the selected mix without another
+    # automatic score, limiter gain or timing shift.
+    import array
+    import math
+
+    from factory.security import run
+    decoded = tmp_path/'decoded.wav'
+    run([ffmpeg(), '-v', 'error', '-y', '-i', renderer.folder/'video.mp4', '-vn',
+         '-ar', '24000', '-ac', 1, '-c:a', 'pcm_s16le', decoded])
+    with wave.open(str(extracted/package.audio_path), 'rb') as source, wave.open(str(decoded), 'rb') as output:
+        a = array.array('h', source.readframes(source.getnframes()))
+        b = array.array('h', output.readframes(len(a)))
+    assert len(a) == len(b)
+    correlation = sum(x*y for x, y in zip(a, b))/math.sqrt(sum(x*x for x in a)*sum(y*y for y in b))
+    assert correlation > .95
     imported = client.post(f"/projects/{musical['id']}/external-render/import", content=result.read_bytes(),
         headers={'Content-Type': 'application/zip'})
     assert imported.status_code == 200, imported.text
@@ -332,7 +352,7 @@ def test_real_blender_musical_round_trip(client, musical, tmp_path):
     evidence = os.environ.get('FACTORY_MUSIC_EVIDENCE')
     if evidence:
         from pathlib import Path
-        target = Path(evidence)
+        target = Path(evidence)/str(package.export_id)
         target.mkdir(parents=True, exist_ok=True)
         for src, name in [(archive, 'input.zip'), (result, 'result.zip')]:
             shutil.copyfile(src, target/name)
@@ -469,3 +489,18 @@ def test_storyboard_segment_checkpoint_recovers_after_interruption(client, music
     provider.fail = False
     result = plan_board(musical['id'], job_id, 'planner', provider, {'provider': 'controlled'}, context, saved, lambda: False)
     assert result.duration == 8 and calls == ['share', 'second', 'second']
+
+
+def test_interrupted_paid_operation_never_retries_or_returns_old_success(client, musical, monkeypatch):
+    revision = save(client, musical)
+    with Session.begin() as db:
+        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == musical['id'],
+                                                   ProductionJob.revision == revision))
+        job.state = 'AUDIO_GENERATION'
+        job.checkpoint = {**job.checkpoint, '_last_music_operation': {'kind': 'sing', 'status': 'started'}}
+    monkeypatch.setattr('factory.pipeline.get_provider', lambda *_: pytest.fail('Unexpected text fallback'))
+    monkeypatch.setattr('factory.music_audio.sing', lambda *_a, **_k: pytest.fail('Paid request repeated'))
+    assert Worker().once()
+    detail = client.get(f"/projects/{musical['id']}").json()
+    assert detail['status'] == 'WAITING_FOR_MUSIC'
+    assert 'No paid request was repeated' in detail['jobs'][0]['error']

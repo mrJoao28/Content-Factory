@@ -37,6 +37,10 @@ def produce(job_id, owner, cancel=lambda: False):
             db.close()
             execute(job_id, owner, operation, cancel)
             return
+        if job.checkpoint.get('_last_music_operation', {}).get('status') == 'started':
+            from .music import MusicRequired
+            raise MusicRequired('A previous music operation was interrupted or failed. Open Music Studio and explicitly '
+                                'retry, import audio or validate the previous takes. No paid request was repeated.')
         is_3d = visual.engine == "blender_3d"
         artifact = db.scalar(
             select(RenderArtifact).where(

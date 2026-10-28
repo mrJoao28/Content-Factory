@@ -61,7 +61,7 @@ class ProjectCreate(Strict):
                 raise ValueError("Duration must represent whole frames")
             import re
             requested = re.findall(r"\b(\d+(?:\.\d+)?)\s*(?:-\s*)?(?:seconds?|segundos?|sec|s)\b", self.idea, re.I)
-            if any(abs(float(t)-self.target_duration) > .01 for t in requested):
+            if not self.musical_format and any(abs(float(t)-self.target_duration) > .01 for t in requested):
                 raise ValueError("Idea duration conflicts with configured duration. Edit the idea or duration before starting.")
             return self
         if self.content_type == "episode" and not 360 <= self.target_duration <= 600:

@@ -19,13 +19,17 @@ from .security import Cancelled, ConfigurationRequired, Vault, run, terminate_tr
 RATE = 24000
 
 
-def process(args, *, cancel=lambda: False, timeout=600):
+def process(args, *, cancel=lambda: False, timeout=600, input=None):
     """Cancel owned FFmpeg process without retaining media in memory or logging arguments."""
     child = subprocess.Popen([str(a) for a in args], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
                              creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
                              start_new_session=os.name != 'nt')
     started = time.monotonic()
     try:
+        if input is not None:
+            child.stdin.write(input)
+            child.stdin.close()
         while child.poll() is None:
             if cancel():
                 raise Cancelled('Music processing cancelled')
@@ -201,13 +205,13 @@ def mix(project, *, cancel=lambda: False, progress=lambda completed, total: None
             raise Cancelled('Mix cancelled; completed segments remain cached')
         takes = project.music_state.get('takes', {}).get(segment.id, {})
         if segment.kind == 'pause':
-            recipe = {'pause': segment.duration}
+            recipe = {'pause': segment.duration, 'mixer_version': 'factory-music-mix-v1'}
         else:
             for take in takes.values():
                 if take['signature'] != signature(segment):
                     raise ValueError('Song changed; select audio for the current lyrics and duration')
                 take_path(take)
-            recipe = {'segment': segment.model_dump(), 'takes': takes}
+            recipe = {'segment': segment.model_dump(), 'takes': takes, 'mixer_version': 'factory-music-mix-v1'}
         import hashlib
         import json
         key = hashlib.sha256(json.dumps(recipe, sort_keys=True).encode()).hexdigest()

@@ -239,7 +239,7 @@ def execute(job_id, owner, operation, cancel):
             from .audio import Piper
             if segment.kind not in {'dialogue', 'narration'}:
                 raise ValueError('Piper generates speech only; use a song import or singing provider')
-            path, role = Piper().generate(segment.text), 'speech'
+            path, role = Piper().generate(segment.text, cancel=cancel), 'speech'
             provenance['provider'] = 'piper_speech'
         else:
             raise ValueError('Unknown music operation')

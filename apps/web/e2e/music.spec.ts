@@ -15,6 +15,10 @@ test("Music Studio persists a real plan, shows import and paid consent, and canc
  await expect(studio.getByRole("button",{name:"Generate sung song (paid)",exact:true})).toBeDisabled();
  await expect(studio.getByRole("button",{name:"Mix and validate final PCM16 WAV",exact:true})).toBeDisabled();
  await expect(studio.getByText("audio_required",{exact:true})).toBeVisible();
+ await studio.getByText("Track volumes and fades (save musical revision to apply)",{exact:true}).click();
+ await studio.getByRole("spinbutton",{name:"Voice / complete song / solo instrumental volume",exact:true}).fill("0.6");
+ await studio.getByRole("button",{name:"Save musical revision",exact:true}).click();
+ await expect.poll(async()=>{const detail=await(await request.get(`${base}/projects/${project.id}`)).json();return detail.music_plan.segments[0].gain;}).toBe(0.6);
  await studio.getByRole("button",{name:"Generate local instrumental",exact:true}).click();
  await expect(studio.getByRole("button",{name:"Pause / cancel music operation",exact:true})).toBeVisible();
  await studio.getByRole("button",{name:"Pause / cancel music operation",exact:true}).click();
