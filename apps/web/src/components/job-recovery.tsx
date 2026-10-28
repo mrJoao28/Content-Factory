@@ -15,13 +15,13 @@ export function JobRecovery({job,act}:{job:Job;act:Act}) {
  const data=connection.data;const account=data?.accounts.find(a=>a.active);
  const current=job.diagnostic?.selection??job.checkpoint._ai_selection as Selection|undefined;
  const next:Selection|undefined=data?.provider==="chatgpt"?{provider:"chatgpt",account_id:account?.id,model:account?.model}:data?{provider:"codex"}:undefined;
- const waiting=/WAITING|FAILED|PAUSED/.test(job.state);
+ const musicFailure=job.state==="WAITING_FOR_MUSIC"||["local_audio","elevenlabs_music"].includes(job.diagnostic?.failure_provider||""); const waiting=/WAITING|FAILED|PAUSED/.test(job.state)&&!musicFailure;
  const ready=!!next&&(next.provider==="codex"||!!(account?.connected&&account.model));
  return <section className="info-box" aria-label="Production text selection">
  <p><strong>Production text connection:</strong> {describe(current)}</p><p>Selection evidence: {job.diagnostic?.selection_source||"checkpoint"}.</p>
  <p>Global provider for new productions: {data?.provider||"checking"}. Source: {data?.configuration?.source||job.diagnostic?.global.source||"checking"}.</p>
  <p className="muted">Saved Settings takes precedence over .env. Existing productions retain their own selection.</p>
- {job.error&&<div role="alert"><strong>Production interrupted: {job.diagnostic?.stage||"stage not recorded"}</strong><p>{job.error}</p><p>{job.diagnostic?.next_action||"Review the configuration before resuming."}</p>{job.diagnostic?.response&&<details open><summary>Safe ChatGPT response diagnostic</summary><pre>{JSON.stringify(job.diagnostic.response,null,2)}</pre><p>No tokens, authorization headers or response content are included.</p></details>}</div>}
+ {job.error&&<div role="alert"><strong>Production interrupted: {job.diagnostic?.stage||"stage not recorded"}</strong><p>{job.error}</p>{job.diagnostic?.failure_provider&&<p>Failure source: {job.diagnostic.failure_provider}</p>}<p>{job.diagnostic?.next_action||"Review the configuration before resuming."}</p>{job.diagnostic?.response&&<details open><summary>Safe ChatGPT response diagnostic</summary><pre>{JSON.stringify(job.diagnostic.response,null,2)}</pre><p>No tokens, authorization headers or response content are included.</p></details>}</div>}
  {waiting&&<><p>New selection: {describe(next)}</p>
  {current?.provider!==next?.provider&&<p>This production keeps its previous provider until you explicitly apply the new selection.</p>}
  {!!job.diagnostic?.completed_steps.length&&<p>Completed checkpoints are retained and may have been produced by another model: {job.diagnostic.completed_steps.join(", ")}.</p>}
