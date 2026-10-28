@@ -264,7 +264,7 @@ class Renderer:
         execute([self.ffmpeg, '-nostdin', '-v', 'error', '-y', '-framerate', p.fps, '-start_number', 1,
                  '-i', self.folder/'%06d.png', '-i', self.extracted/self.package.audio_path,
                  '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'libx264', '-threads', self.config['threads'],
-                 '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-af', 'alimiter=limit=0.95',
+                 '-pix_fmt', 'yuv420p', '-c:a', 'aac',
                  '-t', self.package.board.duration, '-movflags', '+faststart', temporary], timeout=1800, cancel=cancel)
         temporary.replace(movie)
         execute([self.ffmpeg, '-v', 'error', '-xerror', '-i', movie, '-f', 'null', '-'], timeout=1800, cancel=cancel)

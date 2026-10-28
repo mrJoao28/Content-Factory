@@ -181,7 +181,7 @@ def render_3d(board: VisualBoard, destination, *, width, height, fps, audio, qua
             checked_process([ffmpeg(), "-nostdin", "-v", "error", "-y", "-framerate", fps, "-start_number", 1,
                              "-i", folder / "%06d.png", "-i", audio, "-map", "0:v", "-map", "1:a",
                              "-c:v", "libx264", "-threads", settings.blender_threads, "-pix_fmt", "yuv420p",
-                             "-c:a", "aac", "-af", "alimiter=limit=0.95", "-t", board.duration,
+                             "-c:a", "aac", "-t", board.duration,
                              "-movflags", "+faststart", partial], cancel=cancel, timeout=1800, kind="codec")
             partial.replace(destination)
         finally:
