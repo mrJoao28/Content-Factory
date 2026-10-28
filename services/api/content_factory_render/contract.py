@@ -28,6 +28,13 @@ class FileHash(Data):
     size: int = Field(ge=1, le=512*1024**2)
 
 
+class Limits(Data):
+    max_threads: Literal[8] = 8
+    max_batch_frames: Literal[120] = 120
+    max_run_seconds: Literal[21600] = 21600
+    max_disk_mb: Literal[65536] = 65536
+
+
 class InputPackage(Data):
     format: Literal['content-factory-input-v1'] = 'content-factory-input-v1'
     export_id: UUID
@@ -38,6 +45,7 @@ class InputPackage(Data):
     board: VisualBoard
     profile: Profile
     audio: FileHash
+    limits: Limits = Field(default_factory=Limits)
     audio_path: Literal['audio/narration.wav'] = 'audio/narration.wav'
 
     @model_validator(mode='after')
