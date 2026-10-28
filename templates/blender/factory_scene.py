@@ -204,6 +204,7 @@ def smooth(u):
 def pose(rig, actor, shot, t):
     root, head = rig["root"], rig["head"]
     root.location = actor["position"]
+    root.rotation_euler = (0, 0, 0)
     root.rotation_euler.z = math.radians(actor["heading"])
     head.rotation_euler = (0, 0, 0)
     rig["mouth"].scale = (1, 1, 1)
@@ -237,6 +238,21 @@ def pose(rig, actor, shot, t):
                 head.rotation_euler.y = .24*blend
             if kind == "smile":
                 rig["mouth"].scale.x = 1+.25*blend
+            if kind in ("clap", "sway", "dance"):
+                phase = (t-action["start"])*math.tau*action.get("bpm", 100)/60
+                envelope = min(1, (t-action["start"])*4, (action["end"]-t)*4)
+                head.rotation_euler.y = .06*math.sin(phase)*envelope
+                if kind == "clap":
+                    for side, arm in zip((-1, 1), rig["shoulders"]):
+                        arm.rotation_euler.x = -.85*envelope
+                        arm.rotation_euler.y = side*.6*(.5+.5*math.cos(phase))*envelope
+                if kind == "sway":
+                    root.rotation_euler.z += .04*math.sin(phase)*envelope
+                if kind == "dance":
+                    root.rotation_euler.z += .10*math.sin(phase)*envelope
+                    for side, foot, arm in zip((-1, 1), rig["feet"], rig["shoulders"]):
+                        foot.location.z += .035*max(0, side*math.sin(phase))*envelope
+                        arm.rotation_euler.x = side*.3*math.sin(phase)*envelope
             if kind == "wave":
                 rig["shoulders"][1].rotation_euler.y = -1.9*blend
                 rig["shoulders"][1].rotation_euler.x = .22*math.sin(t*9)*blend
@@ -251,6 +267,9 @@ def pose(rig, actor, shot, t):
         eye.scale.z = blink
     for line in shot["dialogues"]:
         if line["character_id"] == actor["character_id"] and any(abs(t-m) < .06 for m in line["mouth_times"]):
+            rig["open_mouth"].hide_render = False
+    for line in shot.get("singing", []):
+        if line["character_id"] == actor["character_id"] and any(abs(t-m) < .08 for m in line["mouth_times"]):
             rig["open_mouth"].hide_render = False
     rig["mouth"].hide_render = not rig["open_mouth"].hide_render
 

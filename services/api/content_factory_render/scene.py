@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 CATALOG_VERSION = "factory-3d-v1"
 CHARACTERS = {"dino": "dino-v1", "milo": "milo-v1"}
 ENVIRONMENTS = ("magic_forest", "dusk_garden", "engineering_studio")
-ACTIONS = ("idle", "walk", "stop", "look", "surprise", "tilt", "smile", "reach", "hold", "release", "wave")
+ACTIONS = ("idle", "walk", "stop", "look", "surprise", "tilt", "smile", "reach", "hold", "release", "wave", "clap", "sway", "dance")
 PROPS = ("magic_egg", "little_star", "gear_pair")
 Number = Annotated[float, Field(ge=-20, le=20)]
 Vector = tuple[Number, Number, Number]
@@ -39,11 +39,12 @@ class Prop(Data):
 
 class Action(Data):
     character_id: Literal["dino", "milo"]
-    kind: Literal["idle", "walk", "stop", "look", "surprise", "tilt", "smile", "reach", "hold", "release", "wave"]
+    kind: Literal["idle", "walk", "stop", "look", "surprise", "tilt", "smile", "reach", "hold", "release", "wave", "clap", "sway", "dance"]
     start: float = Field(ge=0, le=600)
     end: float = Field(gt=0, le=600)
     target: Vector | None = None
     prop_id: Literal["magic_egg", "little_star"] | None = None
+    bpm: float = Field(default=100, ge=40, le=200)
 
 
 class CameraKey(Data):
@@ -72,6 +73,7 @@ class Shot(Data):
     camera: list[CameraKey] = Field(min_length=1, max_length=6)
     dialogues: list[Dialogue] = Field(default_factory=list, max_length=3)
     particles: int = Field(default=12, ge=0, le=24)
+    singing: list[Dialogue] = Field(default_factory=list, max_length=24)
 
     @model_validator(mode="after")
     def timeline(self):
@@ -120,7 +122,7 @@ class Shot(Data):
                 if distance / (action.end-action.start) > 0.8:
                     raise ValueError("Walking exceeds 0.8 metres/second")
                 positions[action.character_id] = action.target
-        for dialogue in self.dialogues:
+        for dialogue in [*self.dialogues, *self.singing]:
             if dialogue.character_id not in actors or dialogue.start >= self.duration:
                 raise ValueError("Dialogue actor or timing invalid")
             if any(t < dialogue.start or t >= self.duration for t in dialogue.mouth_times):
@@ -130,8 +132,8 @@ class Shot(Data):
 
 class VisualBoard(Data):
     catalog_version: Literal["factory-3d-v1"] = CATALOG_VERSION
-    duration: float = Field(gt=0, le=600)
-    scenes: list[Shot] = Field(min_length=1, max_length=60)
+    duration: float = Field(gt=0, le=3600)
+    scenes: list[Shot] = Field(min_length=1, max_length=720)
 
     @model_validator(mode="after")
     def total(self):
