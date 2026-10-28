@@ -1,5 +1,9 @@
 # Guia completo do .env
 
+Music Studio não exige variável secreta nova. Configure o serviço de canto opcional
+exclusivamente no vault pela interface, nunca neste arquivo. Importação e instrumental
+local funcionam sem serviço pago: [guia musical](MUSIC_STUDIO.md).
+
 ## Motor 3D local opcional
 
 `BLENDER_PATH` deve apontar para o executável oficial Blender 4.5 ou 5.2 LTS. Instale pelo

@@ -204,6 +204,7 @@ def smooth(u):
 def pose(rig, actor, shot, t):
     root, head = rig["root"], rig["head"]
     root.location = actor["position"]
+    root.rotation_euler = (0, 0, 0)
     root.rotation_euler.z = math.radians(actor["heading"])
     head.rotation_euler = (0, 0, 0)
     rig["mouth"].scale = (1, 1, 1)
@@ -237,6 +238,21 @@ def pose(rig, actor, shot, t):
                 head.rotation_euler.y = .24*blend
             if kind == "smile":
                 rig["mouth"].scale.x = 1+.25*blend
+            if kind in ("clap", "sway", "dance"):
+                phase = (t-action["start"])*math.tau*action.get("bpm", 100)/60
+                envelope = min(1, (t-action["start"])*4, (action["end"]-t)*4)
+                head.rotation_euler.y = .06*math.sin(phase)*envelope
+                if kind == "clap":
+                    for side, arm in zip((-1, 1), rig["shoulders"]):
+                        arm.rotation_euler.x = -.85*envelope
+                        arm.rotation_euler.y = side*.6*(.5+.5*math.cos(phase))*envelope
+                if kind == "sway":
+                    root.rotation_euler.z += .04*math.sin(phase)*envelope
+                if kind == "dance":
+                    root.rotation_euler.z += .10*math.sin(phase)*envelope
+                    for side, foot, arm in zip((-1, 1), rig["feet"], rig["shoulders"]):
+                        foot.location.z += .035*max(0, side*math.sin(phase))*envelope
+                        arm.rotation_euler.x = side*.3*math.sin(phase)*envelope
             if kind == "wave":
                 rig["shoulders"][1].rotation_euler.y = -1.9*blend
                 rig["shoulders"][1].rotation_euler.x = .22*math.sin(t*9)*blend
@@ -251,6 +267,9 @@ def pose(rig, actor, shot, t):
         eye.scale.z = blink
     for line in shot["dialogues"]:
         if line["character_id"] == actor["character_id"] and any(abs(t-m) < .06 for m in line["mouth_times"]):
+            rig["open_mouth"].hide_render = False
+    for line in shot.get("singing", []):
+        if line["character_id"] == actor["character_id"] and any(abs(t-m) < .08 for m in line["mouth_times"]):
             rig["open_mouth"].hide_render = False
     rig["mouth"].hide_render = not rig["open_mouth"].hide_render
 
@@ -385,6 +404,16 @@ def update(scene, actors, props, particles, shot, t):
             particle.location = props["magic_egg"].location+Vector((.4*math.cos(angle), .4*math.sin(angle), .1+.5*((i*.17+t*.2) % 1)))
 
 
+def frame_range(cfg, shot_duration, scene_offset):
+    """Bound a shot by the declared timeline/batch, never by an old fixed frame cap."""
+    total = round(cfg['board']['duration']*cfg['fps'])
+    first = max(1, int(cfg.get('frame_start', 1)))
+    last = min(total, int(cfg.get('frame_end', total)))
+    start = max(0, first-scene_offset-1)
+    end = min(round(shot_duration*cfg['fps']), last-scene_offset)
+    return range(start, max(start, end))
+
+
 def main():
     manifest_path = Path(sys.argv[sys.argv.index("--")+1]).resolve()
     cfg = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -395,9 +424,8 @@ def main():
     scene_offset = 0
     for shot in board["scenes"]:
         count = round(shot["duration"]*cfg["fps"])
-        required = [i for i in range(count)
-                    if cfg.get("frame_start", 1) <= scene_offset+i+1 <= cfg.get("frame_end", 18000)
-                    and not (output/f"{scene_offset+i+1:06}.png").is_file()]
+        required = [i for i in frame_range(cfg, shot['duration'], scene_offset)
+                    if not (output/f"{scene_offset+i+1:06}.png").is_file()]
         if not required:
             scene_offset += count
             continue

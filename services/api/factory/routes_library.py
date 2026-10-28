@@ -175,7 +175,9 @@ async def import_audio(project_id: str, file: UploadFile = File(...)):
     if suffix not in {".wav", ".mp3"}:
         raise ValueError("Import WAV or MP3 narration")
     with Session() as db:
-        project_or_404(db, project_id)
+        selected = project_or_404(db, project_id)
+        if selected.music_plan:
+            raise ValueError('Import musical segments in Music Studio, then validate the final mix')
         no_running_job(db, project_id)
     path = await save_upload(file, settings.storage_root / "imports", suffix)
     try:
@@ -186,7 +188,7 @@ async def import_audio(project_id: str, file: UploadFile = File(...)):
             project = project_or_404(db, project_id)
             no_running_job(db, project_id)
             project.narration = {
-                **project.narration,
+                **{k: v for k, v in project.narration.items() if k not in {'final', 'generated_path'}},
                 "path": str(path.relative_to(settings.storage_root)),
                 "sha256": digest(path),
                 "duration": float(info["format"]["duration"]),
@@ -194,6 +196,8 @@ async def import_audio(project_id: str, file: UploadFile = File(...)):
             project.approved_hash = None
             project.revision += 1
             project.status = "DRAFT"
+            from .music import supersede_exports
+            supersede_exports(db, project.id)
             for job in db.scalars(select(ProductionJob).where(ProductionJob.project_id == project_id)):
                 if job.state not in {"CANCELLED", "PUBLISHED"}:
                     job.state = "CANCELLED"
@@ -252,6 +256,8 @@ def audio_asset_preview(asset_id: str):
 def configure_audio_mix(project_id: str, body: AudioMix):
     with Session.begin() as db:
         project = project_or_404(db, project_id)
+        if project.music_plan:
+            raise ValueError('Use Music Studio stem volumes; a premixed song receives no automatic background score')
         no_running_job(db, project_id)
         ids = [c.asset_id for c in body.effects] + ([body.music_asset_id] if body.music_asset_id else [])
         for asset_id in ids:
@@ -260,7 +266,9 @@ def configure_audio_mix(project_id: str, body: AudioMix):
                 raise ValueError("Audio mix references an unavailable audio asset")
         if any(cue.time >= project.target_duration for cue in body.effects):
             raise ValueError("Sound effect starts after video end")
-        project.narration = {**project.narration, "mix": body.model_dump()}
+        project.narration = {**{k: v for k, v in project.narration.items() if k not in {'final', 'generated_path'}}, "mix": body.model_dump()}
+        from .music import supersede_exports
+        supersede_exports(db, project.id)
         project.revision += 1
         project.approved_hash = None
         project.status = "DRAFT"
@@ -272,9 +280,12 @@ def configure_audio_mix(project_id: str, body: AudioMix):
 
 @router.get("/projects/{project_id}/narration")
 def narration_preview(project_id: str):
-    with Session() as db:
+    with Session.begin() as db:
         project = project_or_404(db, project_id)
-        if project.narration.get("path"):
+        if project.narration.get('final') or project.music_plan:
+            from .final_audio import resolve
+            path = resolve(project)
+        elif project.narration.get("path"):
             path = safe_path(settings.storage_root, project.narration["path"])
         elif project.narration.get("generated_path"):
             path = Path(project.narration["generated_path"]).resolve()

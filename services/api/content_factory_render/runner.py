@@ -112,13 +112,17 @@ class Renderer:
         if estimate > disk_mb*1024**2:
             raise ValueError('Full timeline exceeds configured frame disk budget; change the profile explicitly or increase the finite budget')
         self.started = time.monotonic()
+        self._complete = None
         self.render_seconds, self.reused = 0., len(self.frames())
         self.report = None
         self.preparation_seconds = time.monotonic()-preparation_started
 
-    def frames(self):
+    def frames(self, refresh=False):
         p = self.package.profile
-        return {i for i in range(1, self.total+1) if valid_frame(self.folder/f'{i:06}.png', p.width, p.height)}
+        if refresh or getattr(self, '_complete', None) is None:
+            self._complete = {i for i in range(1, self.total+1)
+                              if valid_frame(self.folder/f'{i:06}.png', p.width, p.height)}
+        return set(self._complete)
 
     def batch(self, start, end, *, cancel=lambda: False):
         if not 1 <= start <= end <= self.total or end-start >= 120:
@@ -138,9 +142,15 @@ class Renderer:
                 frame.unlink()
         before = self.frames()
         started = time.monotonic()
-        execute([self.blender, '--background', '--factory-startup', '--disable-autoexec', '--threads',
-                 self.config['threads'], '--python-exit-code', 1, '--python', self.template, '--',
-                 self.folder/'manifest.json'], timeout=self.timeout, cancel=cancel)
+        try:
+            execute([self.blender, '--background', '--factory-startup', '--disable-autoexec', '--threads',
+                     self.config['threads'], '--python-exit-code', 1, '--python', self.template, '--',
+                     self.folder/'manifest.json'], timeout=self.timeout, cancel=cancel)
+        finally:
+            # Validate this bounded batch once, including partial completion on cancellation.
+            self._complete.difference_update(range(start, end+1))
+            self._complete.update(i for i in range(start, end+1)
+                                  if valid_frame(self.folder/f'{i:06}.png', p.width, p.height))
         elapsed = time.monotonic()-started
         self.render_seconds += elapsed
         if not set(range(start, end+1)) <= self.frames():
@@ -218,7 +228,7 @@ class Renderer:
                     shutil.copyfile(Path(temp)/name, pending)
                     pending.replace(self.folder/name)
             self.report = data.get('device')
-        self.reused = len(self.frames())
+        self.reused = len(self.frames(refresh=True))
         return self.reused
 
     def render(self, *, persistent=None, batch_size=24, cancel=lambda: False, progress=print):
@@ -246,7 +256,7 @@ class Renderer:
                 self.save_checkpoint(persistent, range(start, end+1))
 
     def finish(self, destination, *, cancel=lambda: False):
-        if len(self.frames()) != self.total or not self.report:
+        if len(self.frames(refresh=True)) != self.total or not self.report:
             raise ValueError('Cannot compose: missing frames or verified Blender device')
         p = self.package.profile
         movie = self.folder/'video.mp4'
@@ -254,7 +264,7 @@ class Renderer:
         execute([self.ffmpeg, '-nostdin', '-v', 'error', '-y', '-framerate', p.fps, '-start_number', 1,
                  '-i', self.folder/'%06d.png', '-i', self.extracted/self.package.audio_path,
                  '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'libx264', '-threads', self.config['threads'],
-                 '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-af', 'alimiter=limit=0.95',
+                 '-pix_fmt', 'yuv420p', '-c:a', 'aac',
                  '-t', self.package.board.duration, '-movflags', '+faststart', temporary], timeout=1800, cancel=cancel)
         temporary.replace(movie)
         execute([self.ffmpeg, '-v', 'error', '-xerror', '-i', movie, '-f', 'null', '-'], timeout=1800, cancel=cancel)

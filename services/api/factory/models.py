@@ -78,6 +78,8 @@ class VideoProject(Entity, Base):
     fps: Mapped[int] = mapped_column(Integer, default=24)
     script: Mapped[dict] = mapped_column(JSON, default=dict)
     storyboard: Mapped[dict] = mapped_column(JSON, default=dict)
+    music_plan: Mapped[dict] = mapped_column(JSON, default=dict)
+    music_state: Mapped[dict] = mapped_column(JSON, default=dict)
     visual_config: Mapped[dict] = mapped_column(JSON, default=lambda: {"engine": "compositor_2d"})
     assets: Mapped[list] = mapped_column(JSON, default=list)
     narration: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -107,6 +109,14 @@ class ScriptVersion(Entity, Base):
     project_id: Mapped[str] = mapped_column(ForeignKey("video_projects.id"))
     revision: Mapped[int]
     content: Mapped[dict] = mapped_column(JSON)
+
+
+class MusicVersion(Entity, Base):
+    __tablename__ = "music_versions"
+    project_id: Mapped[str] = mapped_column(ForeignKey("video_projects.id"))
+    revision: Mapped[int]
+    content: Mapped[dict] = mapped_column(JSON)
+    takes: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class Storyboard(Entity, Base):

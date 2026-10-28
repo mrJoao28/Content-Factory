@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
@@ -35,6 +36,14 @@ async def lifespan(app):
 
 
 app = FastAPI(title="AI Content Factory", version="0.1.0", lifespan=lifespan)
+
+
+@app.exception_handler(RequestValidationError)
+async def safe_validation_error(request, exc):
+    if request.url.path == '/music/elevenlabs':
+        return JSONResponse({'detail': 'Supply a valid music API key; credentials were not stored'}, 422)
+    from fastapi.exception_handlers import request_validation_exception_handler
+    return await request_validation_exception_handler(request, exc)
 origins = [f"http://127.0.0.1:{settings.web_port}", f"http://localhost:{settings.web_port}"]
 app.add_middleware(
     CORSMiddleware,
@@ -97,3 +106,6 @@ app.include_router(routes_visual.router)
 from . import routes_external_render  # noqa: E402
 
 app.include_router(routes_external_render.router)
+from . import routes_music  # noqa: E402
+
+app.include_router(routes_music.router)

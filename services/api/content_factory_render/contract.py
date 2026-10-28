@@ -36,7 +36,7 @@ class Limits(Data):
 
 
 class InputPackage(Data):
-    format: Literal['content-factory-input-v1'] = 'content-factory-input-v1'
+    format: Literal['content-factory-input-v1', 'content-factory-input-v2'] = 'content-factory-input-v2'
     export_id: UUID
     project_id: UUID
     revision: int = Field(ge=1)
@@ -55,7 +55,7 @@ class InputPackage(Data):
 
 
 class ResultPackage(Data):
-    format: Literal['content-factory-result-v1'] = 'content-factory-result-v1'
+    format: Literal['content-factory-result-v1', 'content-factory-result-v2'] = 'content-factory-result-v2'
     export_id: UUID
     project_id: UUID
     revision: int = Field(ge=1)

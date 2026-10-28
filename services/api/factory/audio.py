@@ -8,7 +8,7 @@ from .security import ConfigurationRequired, run
 
 
 class Piper:
-    def generate(self, text, *, speed=1.0):
+    def generate(self, text, *, speed=1.0, cancel=None):
         executable = shutil.which(settings.piper_path) if settings.piper_path else None
         voice = Path(settings.piper_voice_path)
         if not executable or not voice.is_file():
@@ -25,7 +25,13 @@ class Piper:
         if not path.exists():
             temp = path.with_suffix(".partial.wav")
             try:
-                run(
+                execute = run
+                if cancel is not None:
+                    from functools import partial
+
+                    from .music_audio import process
+                    execute = partial(process, cancel=cancel)
+                execute(
                     [executable, "--model", voice, "--output_file", temp, "--length_scale", str(1 / speed)],
                     input=text.encode(),
                     timeout=600,

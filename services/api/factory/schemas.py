@@ -33,6 +33,7 @@ class State(StrEnum):
     WAITING_FOR_MODEL = "WAITING_FOR_MODEL"
     WAITING_FOR_AUTH = "WAITING_FOR_AUTH"
     WAITING_FOR_EXTERNAL_RENDER = "WAITING_FOR_EXTERNAL_RENDER"
+    WAITING_FOR_MUSIC = "WAITING_FOR_MUSIC"
     WAITING_FOR_ASSETS = "WAITING_FOR_ASSETS"
     WAITING_FOR_PLATFORM_APPROVAL = "WAITING_FOR_PLATFORM_APPROVAL"
     READY_FOR_MANUAL_POST = "READY_FOR_MANUAL_POST"
@@ -43,11 +44,14 @@ class ProjectCreate(Strict):
     channel_id: Literal["wondernest", "how-it-works"] | None = None
     series_id: str | None = None
     content_type: Literal["short", "episode", "explainer"] = "short"
-    target_duration: float | None = Field(default=None, ge=8, le=600)
+    target_duration: float | None = Field(default=None, ge=8, le=3600)
     visual: VisualSettings = Field(default_factory=VisualSettings)
+    musical_format: Literal['animated_song', 'musical_story', 'musical_episode', 'compilation'] | None = None
 
     @model_validator(mode="after")
     def duration(self):
+        if self.musical_format and self.visual.engine != 'blender_3d':
+            raise ValueError('Musical productions currently require Blender 3D explicitly')
         if self.target_duration is None:
             self.target_duration = (
                 480 if self.content_type == "episode" else 75 if self.channel_id == "how-it-works" else 35
@@ -57,7 +61,7 @@ class ProjectCreate(Strict):
                 raise ValueError("Duration must represent whole frames")
             import re
             requested = re.findall(r"\b(\d+(?:\.\d+)?)\s*(?:-\s*)?(?:seconds?|segundos?|sec|s)\b", self.idea, re.I)
-            if any(abs(float(t)-self.target_duration) > .01 for t in requested):
+            if not self.musical_format and any(abs(float(t)-self.target_duration) > .01 for t in requested):
                 raise ValueError("Idea duration conflicts with configured duration. Edit the idea or duration before starting.")
             return self
         if self.content_type == "episode" and not 360 <= self.target_duration <= 600:

@@ -166,6 +166,7 @@ def job_diagnostics(db, job):
             .limit(1)
         )
     actions = {
+        "WAITING_FOR_MUSIC": "Open Music Studio: configure or import the selected song, resolve measured timing conflicts and validate the final mix. Text authentication does not enable singing.",
         "WAITING_FOR_EXTERNAL_RENDER": "Storyboard/audio prepared. Export the package and render interactively in Colab, then import in Review studio. External progress is shown only in the notebook; returning to local render requires an explicit action.",
         "WAITING_FOR_AUTH": "Reconnect this production's account in Settings, then Resume.",
         "WAITING_FOR_MODEL": "Choose a provider and an available model in Settings, then apply the selection explicitly.",
@@ -173,7 +174,9 @@ def job_diagnostics(db, job):
         "WAITING_FOR_PLATFORM_APPROVAL": "Check granted permissions before reconnecting.",
         "WAITING_FOR_ASSETS": "Check required assets, Piper/voice or imported narration.",
     }
-    if str(failure.get("code") or "").startswith("visual_"):
+    if failure.get('provider') in {'local_audio', 'elevenlabs_music'} or job.state == 'WAITING_FOR_MUSIC':
+        next_action = actions['WAITING_FOR_MUSIC']
+    elif str(failure.get("code") or "").startswith("visual_"):
         next_action = "Local visual production needs attention. Check Blender 4.5/5.2 LTS CPU, voice, disk and render settings; keep the text connection and resume this revision after resolving the local dependency."
     elif failure.get("code") in {"stream_limit", "event_limit", "text_limit", "runtime_limit"}:
         next_action = "The response exceeded a finite generation budget. Resume this job with the compact storyboard constraints; completed script checkpoints are retained. Review separate CHATGPT limits if it persists."
@@ -190,6 +193,7 @@ def job_diagnostics(db, job):
         "selection_source": source,
         "stage": stage,
         "code": failure.get("code"),
+        "failure_provider": failure.get('provider'),
         "response": failure.get("response"),
         "global": provider_configuration(db),
         "next_action": next_action,
