@@ -72,6 +72,7 @@ def load_package(archive, destination, *, trusted_commit, template):
 class Renderer:
     def __init__(self, package, extracted, work, *, blender, template, ffmpeg='ffmpeg', threads=2,
                  backend='CPU', timeout=1800, disk_mb=8192):
+        preparation_started = time.monotonic()
         self.package, self.extracted = package, Path(extracted)
         self.blender, self.template, self.ffmpeg = blender, Path(template), ffmpeg
         if not 1 <= threads <= 8 or not 1 <= timeout <= 21600 or not 128 <= disk_mb <= 65536:
@@ -113,6 +114,7 @@ class Renderer:
         self.started = time.monotonic()
         self.render_seconds, self.reused = 0., len(self.frames())
         self.report = None
+        self.preparation_seconds = time.monotonic()-preparation_started
 
     def frames(self):
         p = self.package.profile
@@ -154,7 +156,8 @@ class Renderer:
         added = len(self.frames()-before)
         return {'completed': len(self.frames()), 'total': self.total, 'batch_seconds': round(elapsed, 3),
                 'seconds_per_frame': round(elapsed/added, 3) if added else None,
-                'device': self.report, 'reused_frames': self.reused}
+                'device': self.report, 'reused_frames': self.reused,
+                'preparation_seconds': round(self.preparation_seconds, 3)}
 
     def save_checkpoint(self, persistent, numbers):
         numbers = sorted(set(numbers))
@@ -243,6 +246,7 @@ class Renderer:
         shutil.copyfile(self.folder/'000001.png', self.folder/'thumbnail.png')
         atomic_json(self.folder/'report.json', {'execution': self.config, 'device': self.report,
                     'frames': self.total, 'reused_frames': self.reused, 'render_seconds': self.render_seconds,
+                    'preparation_seconds': self.preparation_seconds,
                     'elapsed_seconds': time.monotonic()-self.started, 'origin': 'assisted-notebook'})
         files = {name: self.folder/name for name in ('video.mp4', 'thumbnail.png', 'report.json')}
         result = ResultPackage(export_id=self.package.export_id, project_id=self.package.project_id,
