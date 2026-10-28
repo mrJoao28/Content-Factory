@@ -159,6 +159,17 @@ class QualityReview(Entity, Base):
     checks: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class ExternalRenderExport(Entity, Base):
+    __tablename__ = "external_render_exports"
+    project_id: Mapped[str] = mapped_column(ForeignKey("video_projects.id"), index=True)
+    revision: Mapped[int]
+    semantic_hash: Mapped[str] = mapped_column(index=True)
+    manifest: Mapped[dict] = mapped_column(JSON)
+    path: Mapped[str]
+    state: Mapped[str] = mapped_column(default="EXPORTED")
+    artifact_hash: Mapped[str | None] = mapped_column(nullable=True)
+
+
 class PublishingSchedule(Entity, Base):
     __tablename__ = "publishing_schedules"
     project_id: Mapped[str] = mapped_column(ForeignKey("video_projects.id"), unique=True)

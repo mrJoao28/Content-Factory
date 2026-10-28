@@ -94,7 +94,7 @@ def input_manifest(board, *, width, height, fps, quality, revision, audio, info)
     board.validate_project(board.duration, fps)
     return {"board": board.model_dump(mode="json"), "width": width, "height": height, "fps": fps,
             "quality": quality, "revision": revision, "threads": settings.blender_threads,
-            "template_sha256": digest(SCRIPT), "blender": info, "audio_sha256": digest(audio)}
+            "template_sha256": digest(SCRIPT), "blender": info, "backend": info["device"], "audio_sha256": digest(audio)}
 
 
 def fingerprint(manifest):
@@ -113,8 +113,11 @@ def valid_frame(path, width, height):
 
 
 def render_3d(board: VisualBoard, destination, *, width, height, fps, audio, quality="preview",
-              revision=1, cancel=lambda: False, progress=lambda data: None):
+              revision=1, cancel=lambda: False, progress=lambda data: None, backend="CPU"):
     info = blender_info()
+    if backend not in {"CPU", "OPTIX", "CUDA"}:
+        raise ValueError("Choose an explicit supported Cycles backend")
+    info["device"] = backend
     if not 64 <= width <= 1920 or not 64 <= height <= 1920 or width % 2 or height % 2:
         raise ValueError("3D resolution must be even and bounded to 1920 pixels")
     if fps not in (24, 30) or quality not in ("preview", "final"):
@@ -164,7 +167,7 @@ def render_3d(board: VisualBoard, destination, *, width, height, fps, audio, qua
                       "elapsed_seconds": round(elapsed, 1),
                       "eta_seconds": round(elapsed/rendered*(total-len(complete))) if rendered >= 8 else None})
 
-        progress({"stage": "scene_preparation", "completed": initial, "total": total, "engine": "CYCLES CPU"})
+        progress({"stage": "scene_preparation", "completed": initial, "total": total, "engine": "CYCLES " + backend})
         if initial != total:
             checked_process([info["binary"], "--background", "--factory-startup", "--disable-autoexec",
                              "--threads", settings.blender_threads, "--python-exit-code", "1",
@@ -185,7 +188,7 @@ def render_3d(board: VisualBoard, destination, *, width, height, fps, audio, qua
             partial.unlink(missing_ok=True)
         shutil.copyfile(folder / "000001.png", Path(destination).parent / "thumbnail.png")
         report(total)
-        return {"engine": "blender_3d", "renderer": "CYCLES CPU", "blender_version": info["version"],
+        return {"engine": "blender_3d", "renderer": "CYCLES " + backend, "blender_version": info["version"],
                 "input_hash": cache_id, "manifest": str(payload.relative_to(Path(destination).parent)),
                 "frames": total, "resumed_frames": initial, "elapsed_seconds": round(time.monotonic()-started, 3)}
     finally:

@@ -105,6 +105,10 @@ def diagnose():
         "state": "PERMISSION_REQUIRED",
         "note": "Explicit approval and confirmation required",
     }
+    result["colab"] = {
+        "state": "PERMISSION_REQUIRED",
+        "note": "Assisted notebook only. Export locally, manually authorize a hosted Colab runtime/optional Drive, then import for review. GPU availability and inference are not implied.",
+    }
     return result
 
 

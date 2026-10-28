@@ -185,3 +185,6 @@ serviço externo de clipes está implementado ou ativado**. O caminho Blender é
 
 Git: a criação de branch foi tentada e negada pela permissão de escrita em `.git`.
 Não foram feitos commits/push/PR desta mudança. Arquivos locais estão preservados.
+# Execução assistida externa
+
+Blender 3D também pode ser preparado localmente e exportado para um notebook Colab supervisionado. A escolha de execução é independente do provider textual e do motor visual. [Fluxo, limites e retomada](COLAB.md). Não transfira um render ativo sem pausar e aguardar a liberação do lease; os frames locais existentes são preservados e não são reutilizados automaticamente em GPU.

@@ -2,7 +2,7 @@ const {spawn,spawnSync}=require('node:child_process');
 const fs=require('node:fs');const path=require('node:path');const http=require('node:http');const {randomUUID}=require('node:crypto');
 const root=path.resolve(__dirname,'..');const web=path.join(root,'apps/web');
 const venvPython=path.join(root,process.platform==='win32'?'.venv/Scripts/python.exe':'.venv/bin/python');
-const python=fs.existsSync(venvPython)?venvPython:'python';
+const python=process.env.FACTORY_TEST_PYTHON||(fs.existsSync(venvPython)?venvPython:'python');
 const env={...process.env,FACTORY_NEXT_DIST_DIR:`.next-e2e-${randomUUID()}`,PYTHONPATH:path.join(root,'services/api'),FACTORY_DISABLE_WORKER:'1',API_PORT:'8001',WEB_PORT:'3001',NEXT_PUBLIC_API_URL:'http://127.0.0.1:8001',NEXT_TELEMETRY_DISABLED:'1',DATABASE_URL:'sqlite:///'+path.join(root,`data/e2e-${randomUUID()}.db`),STORAGE_ROOT:path.join(root,'data/e2e'),OUTPUT_DIR:path.join(root,'output/e2e'),ASSETS_DIR:path.join(root,'data/e2e-assets')};
 const owned=[];let errors='';
 function start(bin,args){const p=spawn(bin,args,{cwd:web,env,windowsHide:true,stdio:['ignore','ignore','pipe'],detached:process.platform!=='win32'});p.stderr.on('data',b=>errors=(errors+b.toString()).slice(-8000));owned.push(p);return p;}

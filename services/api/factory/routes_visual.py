@@ -67,7 +67,7 @@ def revise(project_id, body, change=None):
                                                    ProductionJob.revision == project.revision))
         saved = dict(old.checkpoint) if old else {}
         if change:
-            if change.engine == "blender_3d":
+            if change.engine == "blender_3d" and change.execution_location == "local":
                 blender_info()
             project.visual_config = change.model_dump(mode="json")
             project.width, project.height = map(int, change.resolution.split("x"))

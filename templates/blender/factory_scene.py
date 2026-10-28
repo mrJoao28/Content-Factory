@@ -1,7 +1,7 @@
 """Repository-owned Blender 4.5/5.2 LTS script. Input is validated data, never Python.
 
 Original procedural assets, generated deterministically; no imported files, drivers or add-ons.
-CPU Cycles deliberately avoids headless GPU/EEVEE assumptions. Visual QA is still required.
+Cycles devices are selected explicitly; GPU failure never falls back to CPU. Visual QA is still required.
 """
 import json
 import math
@@ -255,13 +255,34 @@ def pose(rig, actor, shot, t):
     rig["mouth"].hide_render = not rig["open_mouth"].hide_render
 
 
+def configure_device(scene, backend):
+    if backend not in {"CPU", "OPTIX", "CUDA"}:
+        raise ValueError("Unsupported explicit Cycles backend")
+    devices = []
+    if backend != "CPU":
+        preferences = bpy.context.preferences.addons["cycles"].preferences
+        preferences.compute_device_type = backend
+        preferences.refresh_devices()
+        for device in preferences.devices:
+            device.use = device.type == backend
+            if device.use:
+                devices.append({"name": device.name, "type": device.type, "id": device.id})
+        if not devices:
+            raise RuntimeError("Requested Cycles GPU backend has no supported devices; explicitly choose CPU if desired")
+    scene.cycles.device = "CPU" if backend == "CPU" else "GPU"
+    return {"backend": backend, "devices": devices, "blender": bpy.app.version_string}
+
+
 def setup(shot, cfg):
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
-    scene.cycles.device = "CPU"
-    scene.cycles.samples = 8 if cfg["quality"] == "preview" else 32
+    device = configure_device(scene, cfg.get("backend", "CPU"))
+    if cfg.get("device_report"):
+        Path(cfg["device_report"]).write_text(json.dumps(device), encoding="utf-8")
+    scene.cycles.seed = cfg.get("seed", 0)
+    scene.cycles.samples = cfg.get("samples", 8 if cfg["quality"] == "preview" else 32)
     scene.cycles.use_denoising = True
     scene.cycles.max_bounces = 3
     scene.render.threads_mode = "FIXED"
@@ -374,7 +395,9 @@ def main():
     scene_offset = 0
     for shot in board["scenes"]:
         count = round(shot["duration"]*cfg["fps"])
-        required = [i for i in range(count) if not (output/f"{scene_offset+i+1:06}.png").is_file()]
+        required = [i for i in range(count)
+                    if cfg.get("frame_start", 1) <= scene_offset+i+1 <= cfg.get("frame_end", 18000)
+                    and not (output/f"{scene_offset+i+1:06}.png").is_file()]
         if not required:
             scene_offset += count
             continue

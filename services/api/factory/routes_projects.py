@@ -89,7 +89,8 @@ def create_project(body: ProjectCreate):
         )
         if body.visual.engine == "blender_3d":
             from .visual_render import blender_info
-            blender_info()  # Fail before enqueue/text usage if the local renderer is absent.
+            if body.visual.execution_location == "local":
+                blender_info()  # External preparation does not require a local renderer.
             project.width, project.height = map(int, body.visual.resolution.split("x"))
             project.fps = body.visual.fps
         db.add(project)
@@ -165,6 +166,8 @@ def control_job(project_id: str, action: str):
         )
         if action == "resume":
             no_running_job(db, project_id)
+            if job and job.state == "WAITING_FOR_EXTERNAL_RENDER":
+                raise HTTPException(409, "Waiting for assisted external render: export/import the package or explicitly return to local rendering")
             if not job:
                 job = enqueue(db, project)
             elif job.state not in WAITING | {"CANCELLED", "DRAFT"}:
@@ -183,6 +186,11 @@ def control_job(project_id: str, action: str):
                 raise HTTPException(409, "No controllable job")
             job.state = "PAUSED" if action == "pause" else "CANCELLED"
             project.status = job.state
+            if action == "cancel":
+                from .models import ExternalRenderExport
+                for exported in db.scalars(select(ExternalRenderExport).where(
+                    ExternalRenderExport.project_id == project_id, ExternalRenderExport.state == "EXPORTED")):
+                    exported.state = "CANCELLED"
         else:
             raise HTTPException(404, "Unknown action")
         return serialize(job)
