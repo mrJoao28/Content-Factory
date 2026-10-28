@@ -99,7 +99,7 @@ def timeline(project):
         return []
     plan = MusicPlan.model_validate(project.music_plan)
     takes = project.music_state.get('takes', {})
-    result, start = [], 0.0
+    result, start, measured_start = [], 0.0, 0.0
     for segment in plan.segments:
         selected = takes.get(segment.id, {})
         measured = max((t['duration'] for t in selected.values()), default=0) if segment.kind != 'pause' else segment.duration
@@ -110,12 +110,17 @@ def timeline(project):
             ready = 'premixed' in selected or 'vocals' in selected
         if segment.kind in {'narration', 'dialogue'}:
             ready = 'speech' in selected
-        conflict = not ready or abs(measured-segment.duration) > 1/project.fps
+        conflict = not ready or abs(measured-segment.duration) > 1/project.fps or any(
+            abs(t['duration']-segment.duration) > 1/project.fps
+            for role, t in selected.items() if role != 'effects')
+        measured_end = measured_start+measured if measured_start is not None and ready else None
         result.append(dict(id=segment.id, start=start, end=start+segment.duration,
                            planned=segment.duration, measured=measured, conflict=conflict,
+                           measured_start=measured_start if ready else None, measured_end=measured_end,
                            state='audio_required' if not ready else 'duration_conflict' if conflict else 'ready',
                            beats=[{**b.model_dump(), 'global_time': start+b.time} for b in segment.beats]))
         start += segment.duration
+        measured_start = measured_end
     return result
 
 

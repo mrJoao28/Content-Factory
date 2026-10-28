@@ -58,6 +58,10 @@ class MusicSegment(Strict):
             raise ValueError('Lyrics exceed the bounded 12000 characters per segment')
         if self.kind == 'unit' and (not self.source_project_id or not self.source_artifact_hash):
             raise ValueError('Compilation units require an existing reviewed project and exact video hash')
+        if self.kind == 'unit' and (self.gain != .8 or self.instrumental_gain != .25 or self.effects_gain != .25
+                or self.fade_in != .05 or self.fade_out != .1 or self.ducking or self.events
+                or self.sections or self.text or self.mouth_times is not None):
+            raise ValueError('Compilation units preserve reviewed content; edit and approve the source before changing its audio or animation')
         if self.kind == 'song' and (not self.sections or not any(s.lines for s in self.sections)):
             raise ValueError('A song needs original lyrics; lyrics are not generated singing')
         if self.sections and abs(sum(s.duration for s in self.sections)-self.duration) > .001:

@@ -514,3 +514,31 @@ def test_new_music_revision_preserves_completed_job_history(client, musical):
     save(client, musical)
     with Session() as db:
         assert db.get(ProductionJob, original_id).state == 'PUBLISHED'
+
+
+def test_short_voice_cannot_be_hidden_by_longer_instrumental():
+    from types import SimpleNamespace
+
+    from factory.music import timeline
+    production = SimpleNamespace(music_plan=plan(), fps=24, music_state={'takes': {'share': {
+        'vocals': {'duration': 6}, 'instrumental': {'duration': 8}}}})
+    row = timeline(production)[0]
+    assert row['state'] == 'duration_conflict'
+    assert row['measured_start'] == 0 and row['measured_end'] == 8
+
+
+def test_trusted_template_renders_long_timeline_and_exact_resumed_batch():
+    import ast
+
+    from factory.config import ROOT
+    tree = ast.parse((ROOT/'templates/blender/factory_scene.py').read_text(encoding='utf-8'))
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'frame_range')
+    scope = {}
+    # Execute only this trusted pure repository function; no bpy, AI code or user scripts.
+    exec(compile(ast.Module(body=[function], type_ignores=[]), 'trusted-frame-range', 'exec'), scope)
+    frames = scope['frame_range']
+    cfg = {'fps': 24, 'board': {'duration': 900}}
+    assert list(frames(cfg, 25, 21000))[-1]+21001 == 21600
+    cfg.update(frame_start=19993, frame_end=20004)
+    assert [19501+i for i in frames(cfg, 60, 19500)] == list(range(19993, 20005))
+    assert not list(frames(cfg, 5, 0))
