@@ -85,7 +85,7 @@ def test_import_mix_preview_and_colab_use_identical_audio(client, musical, tmp_p
     audio = tmp_path/'fixture.wav'
     sine(audio, seconds=8)
     source_hash = digest(audio)
-    response = client.post(f"/projects/{musical['id']}/music/share/import", params={
+    response = client.post(f"/projects/{musical['id']}/music/share/import", data={
         'revision': revision, 'rights': 'Test synthesized tone, not singing', 'role': 'premixed'},
         files={'file': ('fixture.wav', audio.read_bytes(), 'audio/wav')})
     assert response.status_code == 200, response.text
@@ -125,7 +125,7 @@ def test_timing_conflict_and_active_lease_guard(client, musical, tmp_path):
     revision = save(client, musical)
     audio = tmp_path/'wrong.wav'
     sine(audio, seconds=9)
-    response = client.post(f"/projects/{musical['id']}/music/share/import", params={
+    response = client.post(f"/projects/{musical['id']}/music/share/import", data={
         'revision': revision, 'rights': 'Test fixture', 'role': 'premixed'},
         files={'file': ('fixture.wav', audio.read_bytes(), 'audio/wav')})
     assert response.status_code == 200
@@ -211,7 +211,7 @@ def test_long_segmented_mix_and_selective_invalidation(client, musical, tmp_path
     run([ffmpeg(), '-v', 'error', '-y', '-f', 'lavfi', '-i',
          'sine=frequency=220:sample_rate=24000:duration=300', '-c:a', 'pcm_s16le', path])
     for name in ['share', 'second']:
-        response = client.post(f"/projects/{musical['id']}/music/{name}/import", params={
+        response = client.post(f"/projects/{musical['id']}/music/{name}/import", data={
             'revision': revision, 'rights': 'Controlled test tone, not music vocals', 'role': 'instrumental'},
             files={'file': ('known.wav', path.read_bytes(), 'audio/wav')})
         assert response.status_code == 200, response.text

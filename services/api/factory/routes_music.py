@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import Field, SecretStr
 from sqlalchemy import select, text
@@ -126,8 +126,8 @@ def operation(project_id: str, body: Operation):
 
 
 @router.post('/projects/{project_id}/music/{segment_id}/import')
-async def import_song(project_id: str, segment_id: str, revision: int, rights: str,
-                      role: Literal['premixed', 'vocals', 'instrumental', 'speech', 'effects'] = 'premixed',
+async def import_song(project_id: str, segment_id: str, revision: int = Form(...), rights: str = Form(...),
+                      role: Literal['premixed', 'vocals', 'instrumental', 'speech', 'effects'] = Form('premixed'),
                       file: UploadFile = File(...)):
     if not rights.strip() or len(rights) > 3000:
         raise ValueError('Declare the origin and rights for the imported audio')

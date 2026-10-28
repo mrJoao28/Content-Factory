@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { execFileSync } from "node:child_process";
+import path from "node:path";
 
 test("Music Studio persists a real plan, shows import and paid consent, and cancels queued work",async({page,request})=>{
  const base="http://127.0.0.1:8001",headers={"X-Factory-Client":"local"};
@@ -24,5 +26,19 @@ test("Music Studio persists a real plan, shows import and paid consent, and canc
  await studio.getByRole("button",{name:"Pause / cancel music operation",exact:true}).click();
  const current=await(await request.get(`${base}/projects/${project.id}`)).json();
  expect(current.jobs[0].state).toBe("PAUSED");expect(current.jobs[0].checkpoint._music_operation).toBeUndefined();
+ const root=path.resolve("../.."),python=process.env.FACTORY_TEST_PYTHON||path.join(root,".venv/Scripts/python.exe");
+ const fixture=(mode:string)=>execFileSync(python,[path.join(root,"tests/seed_music_browser.py"),mode,project.id],{cwd:root,env:process.env,windowsHide:true}).toString().trim();
+ const source=fixture("audio");
+ await studio.getByRole("textbox",{name:"Import origin and rights",exact:true}).fill("Known synthesized test tone; this fixture is not singing");
+ await studio.getByLabel("Import audio help",{exact:true}).setInputFiles(source);
+ await expect(studio.getByText(/premixed · measured 8.000s/)).toBeVisible();
+ await studio.getByRole("button",{name:"Mix and validate final PCM16 WAV",exact:true}).click();
+ await expect.poll(async()=>{const p=await(await request.get(`${base}/projects/${project.id}`)).json();return p.jobs[0].checkpoint._music_operation?.kind;}).toBe("mix");
+ fixture("mix");
+ await expect(studio.getByText(/Final mix validated:/)).toBeVisible();
+ await expect(studio.getByLabel("Final music mix",{exact:true})).toBeVisible();
+ const audio=studio.getByLabel("Final music mix",{exact:true});
+ await expect.poll(()=>audio.evaluate(a=>(a as HTMLAudioElement).readyState)).toBeGreaterThanOrEqual(2);
+ const mix=await request.get(`${base}/projects/${project.id}/narration`);expect(mix.ok()).toBeTruthy();expect((await mix.body()).length).toBeGreaterThan(1000);
  await page.screenshot({path:"../../output/music-studio-browser.png",fullPage:true});
 });

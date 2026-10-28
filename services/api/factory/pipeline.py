@@ -1,5 +1,6 @@
 import time
 
+from pydantic import ValidationError
 from sqlalchemy import delete, select
 
 from .audio import Piper, mix_tracks
@@ -35,7 +36,11 @@ def produce(job_id, owner, cancel=lambda: False):
         if operation:
             from .music import execute
             db.close()
-            execute(job_id, owner, operation, cancel)
+            try:
+                execute(job_id, owner, operation, cancel)
+            except ValidationError as exc:
+                fields = ', '.join('.'.join(str(p) for p in e['loc']) for e in exc.errors(include_input=False)[:8])
+                raise ValueError('Music output did not pass validation; review these fields: '+fields) from None
             return
         if job.checkpoint.get('_last_music_operation', {}).get('status') == 'started':
             from .music import MusicRequired
