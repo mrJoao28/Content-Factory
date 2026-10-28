@@ -23,6 +23,10 @@ test("assisted export and imported return use real routes and require human revi
  await page.getByLabel("Import Colab result").setInputFiles(prepared.file);
  await expect(page.getByText("Imported and technically validated; human review required",{exact:true})).toBeVisible();
  await expect(page.locator("video")).toBeVisible();
+ await expect.poll(()=>page.locator("video").evaluate(video=>(video as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+ await page.locator("video").evaluate(async element=>{const video=element as HTMLVideoElement;video.muted=true;await video.play();});
+ await expect.poll(()=>page.locator("video").evaluate(video=>(video as HTMLVideoElement).currentTime)).toBeGreaterThan(0);
+ await page.locator("video").evaluate(video=>(video as HTMLVideoElement).pause());
  const detail=await(await request.get(`${base}/projects/${project.id}`)).json();
  expect(detail.status).toBe("HUMAN_REVIEW");expect(detail.approved_hash).toBeNull();expect(detail.artifacts).toHaveLength(1);
  expect(detail.jobs[0].checkpoint.creative_director.summary).toBe("Preserved fixture");
