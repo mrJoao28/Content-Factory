@@ -168,6 +168,14 @@ class Renderer:
         files = {f'{n:06}.png': self.folder/f'{n:06}.png' for n in numbers}
         frame_hashes = {name: sha(path) for name, path in files.items()}
         shard_id = identity(frame_hashes)
+        existing_index = target/f'{shard_id}.json'
+        existing_archive = target/f'{shard_id}.zip'
+        if existing_index.is_file() and existing_index.stat().st_size <= 65536 and existing_archive.is_file():
+            previous = json.loads(existing_index.read_text())
+            if (previous.get('execution_hash') == self.cache_id and previous.get('frames') == frame_hashes
+                    and previous.get('sha256') == sha(existing_archive)):
+                # Do not replace a durable shard (ZIP timestamps can differ across restores).
+                return
         local = self.folder/f'{shard_id}.zip'
         pack(local, files)
         pending = target/f'{shard_id}.partial'

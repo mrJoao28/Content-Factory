@@ -196,6 +196,10 @@ def test_checkpoint_restore_verifies_shards(tmp_path):
     for i in (1, 2):
         Image.new('RGB', (64, 96), (100, i, 50)).save(renderer.folder/f'{i:06}.png')
     renderer.save_checkpoint(tmp_path/'drive', [1, 2])
+    saved = next((tmp_path/'drive'/renderer.cache_id).glob('*.zip'))
+    before = (sha(saved), saved.stat().st_mtime_ns)
+    renderer.save_checkpoint(tmp_path/'drive', [1, 2])
+    assert (sha(saved), saved.stat().st_mtime_ns) == before
     renderer.folder = tmp_path/'new-session'
     renderer.folder.mkdir()
     assert renderer.restore(tmp_path/'drive') == 2
