@@ -23,7 +23,7 @@ from .render_release import RENDER_COMMIT
 from .visual_schema import VisualBoard, VisualSettings
 
 TEMPLATE = ROOT/'templates/blender/factory_scene.py'
-NOTEBOOK_URL = 'https://colab.research.google.com/github/mrJoao28/Content-Factory/blob/feat/colab-assisted-render/notebooks/content_factory_colab.ipynb'
+NOTEBOOK_URL = 'https://colab.research.google.com/github/mrJoao28/Content-Factory/blob/b294cd057fc826ee5eb02044b9ab3bbd196985ab/notebooks/content_factory_colab.ipynb'
 
 
 def current_job(db, project):

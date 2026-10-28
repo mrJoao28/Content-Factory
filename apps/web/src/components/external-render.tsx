@@ -16,7 +16,7 @@ export function ExternalRender({project,act,busy}:{project:Project;act:Act;busy:
  const external=project.visual_config?.execution_location==="colab";
  const location=(execution_location:"colab"|"local")=>act(()=>send(`/projects/${project.id}/render-location`,{expected_revision:project.revision,execution_location,hardware}),"Execution location saved; completed checkpoints retained");
  return <section className="info-box" aria-label="Assisted Colab render"><h3>Assisted Colab render</h3>
- <p>Execution: {external?"Colab notebook (manual)":"local"}. Visual engine: Blender 3D. Text and voice remain on this computer.</p>
+ <p>Execution: {external?"Colab notebook (manual)":"local"}. Visual engine: Blender 3D. Planning uses your existing connection; narration is prepared locally. You upload the exported scene/audio package.</p>
  <label>External hardware <select aria-label="External hardware" value={hardware} onChange={e=>setHardware(e.target.value as typeof hardware)}><option value="GPU">GPU · probe OptiX, then CUDA</option><option value="OPTIX">OptiX only</option><option value="CUDA">CUDA only</option><option value="CPU">CPU explicitly</option></select></label>
  <p>Pause an active production and wait for its lease to release before changing execution. Preparation retains concept/script checkpoints and stops after validated storyboard and measured audio. Exporting uses no additional inference.</p>
  {waiting&&<p role="status">Waiting for external execution/import. Progress is shown in the notebook; this application receives no live Colab progress. Resume does not start a local render.</p>}
