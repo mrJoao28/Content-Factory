@@ -504,3 +504,13 @@ def test_interrupted_paid_operation_never_retries_or_returns_old_success(client,
     detail = client.get(f"/projects/{musical['id']}").json()
     assert detail['status'] == 'WAITING_FOR_MUSIC'
     assert 'No paid request was repeated' in detail['jobs'][0]['error']
+
+
+def test_new_music_revision_preserves_completed_job_history(client, musical):
+    with Session.begin() as db:
+        original = db.scalar(select(ProductionJob).where(ProductionJob.project_id == musical['id']))
+        original.state = 'PUBLISHED'
+        original_id = original.id
+    save(client, musical)
+    with Session() as db:
+        assert db.get(ProductionJob, original_id).state == 'PUBLISHED'

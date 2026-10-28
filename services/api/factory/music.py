@@ -39,7 +39,8 @@ def invalidate(db, project, *, storyboard=True):
         db.add(MusicVersion(project_id=project.id, revision=project.revision,
                             content=project.music_plan, takes=project.music_state))
     for job in db.scalars(select(ProductionJob).where(ProductionJob.project_id == project.id)):
-        job.state = 'CANCELLED'
+        if job.revision == project.revision and job.state not in {'PUBLISHED', 'APPROVED', 'HUMAN_REVIEW', 'SCHEDULED'}:
+            job.state = 'CANCELLED'
     supersede_exports(db, project.id)
     project.revision += 1
     project.approved_hash = None
