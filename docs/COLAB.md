@@ -2,7 +2,7 @@
 
 O Windows prepara texto, storyboard 3D validado e áudio medido. O notebook executa somente Blender/Cycles e FFmpeg. O resultado volta para validação local e `HUMAN_REVIEW`; não existe aprovação/publicação automática. OAuth, Piper, vozes, SQLite e conexões permanecem no PC. Nenhum token, `.env`, banco, perfil ou log é exportado.
 
-[Abrir o notebook versionado no Colab](https://colab.research.google.com/github/mrJoao28/Content-Factory/blob/b294cd057fc826ee5eb02044b9ab3bbd196985ab/notebooks/content_factory_colab.ipynb).
+[Abrir o notebook versionado no Colab](https://colab.research.google.com/github/mrJoao28/Content-Factory/blob/9cef5af0cf88dfcc025ca686787ccfe6ad7c74b7/notebooks/content_factory_colab.ipynb).
 
 ## Ativação no Windows
 

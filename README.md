@@ -1,5 +1,10 @@
 # AI Content Factory
 
+Produção musical infantil: consulte [Music Studio — guia em português](docs/MUSIC_STUDIO.md)
+para planejar canções originais, importar/gerar áudio, validar a mixagem e renderizar
+com Blender/Colab. Canto automático é uma integração opcional separada do login textual;
+a demonstração vocal depende de uma canção original ou serviço configurado/autorizado.
+
 Produção Blender 3D local agora tem um motor explícito por projeto, preservando o
 compositor 2D/2.5D. Leia [configuração e estado da validação 3D](docs/LOCAL_3D.md).
 O adaptador suporta Blender 4.5 e 5.2 LTS em CPU. A instalação detectada neste

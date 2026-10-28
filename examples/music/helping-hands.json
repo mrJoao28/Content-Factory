@@ -1,0 +1,17 @@
+{
+  "format": "musical_story",
+  "audience": "Children ages 3-7",
+  "language": "en-US",
+  "educational_goal": "Practice asking for help, sharing and thanking a friend",
+  "characters": ["dino", "milo"],
+  "environment": "magic_forest",
+  "beginning": "Dino notices Milo nearby and offers to help him find a little star.",
+  "development": "They look together, sing about helping and celebrate the discovery.",
+  "conclusion": "The friends thank each other and wave to the audience.",
+  "segments": [
+    {"id":"opening","title":"A friend needs help","kind":"narration","duration":5,"text":"Dino saw his friend. Could they find the little star together?","visible_action":"Dino looks toward Milo, then smiles."},
+    {"id":"helping-hands","title":"Little Helping Hands","kind":"song","duration":25,"singer":"offscreen","bpm_requested":96,"meter":"4/4","direction":"Original warm English children's song, gentle clear singing, no imitation of existing songs","instruments":["soft piano","bells","gentle hand percussion"],"visible_action":"Dino and Milo look for the star, sway together, clap and wave when they find it.","sections":[{"kind":"verse","duration":10,"lines":["Little helping hands, what can we do?","Look beside a friend; I will look with you."]},{"kind":"chorus","duration":10,"lines":["Help a little, share a smile,","Side by side, we shine a while."]},{"kind":"outro","duration":5,"lines":["Thank you, friend, for helping me!","Kindness grows for all to see."]}],"events":[{"time":0,"end":8,"character_id":"dino","action":"sway"},{"time":10,"end":18,"character_id":"milo","action":"clap"},{"time":20,"end":25,"character_id":"dino","action":"wave"}]},
+    {"id":"thanks","title":"Thank you, friend","kind":"dialogue","duration":3,"character_id":"milo","text":"Thank you, Dino!","visible_action":"Milo smiles at Dino."},
+    {"id":"ending-pause","title":"A calm ending","kind":"pause","duration":2,"visible_action":"Both characters rest calmly in the forest."}
+  ]
+}
