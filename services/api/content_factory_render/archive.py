@@ -62,7 +62,8 @@ def unpack(source, destination, *, allowed=None):
                 name = entry.filename
                 parts = name.split('/')
                 mode = entry.external_attr >> 16
-                if (entry.orig_filename != name or not re.fullmatch(r'[A-Za-z0-9_./-]+', name) or any(p in {'', '.', '..'} for p in parts)
+                if (len(name) > 160 or len(parts) > 4 or entry.orig_filename != name
+                        or not re.fullmatch(r'[A-Za-z0-9_./-]+', name) or any(p in {'', '.', '..'} for p in parts)
                         or name.casefold() in names or (mode and stat.S_IFMT(mode) not in {0, stat.S_IFREG})
                         or entry.flag_bits & 1 or entry.compress_type not in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}
                         or (allowed is not None and name not in allowed)):

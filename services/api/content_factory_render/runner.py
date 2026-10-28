@@ -225,6 +225,13 @@ class Renderer:
             self.timeout = min(configured_timeout, max(.1, deadline-time.monotonic()))
             try:
                 progress(self.batch(start, end, cancel=cancel))
+            except (InterruptedError, TimeoutError, RuntimeError, KeyboardInterrupt):
+                # A controlled interruption can still persist already finalized frames from this batch.
+                if persistent:
+                    complete = self.frames().intersection(range(start, end+1))
+                    if complete:
+                        self.save_checkpoint(persistent, complete)
+                raise
             finally:
                 self.timeout = configured_timeout
             if persistent:
