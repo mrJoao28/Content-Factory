@@ -17,11 +17,16 @@ código remota foi descartada. A branch musical não foi integrada automaticamen
   dessa execução. Antes disso, a suíte completa também passou com 237 testes.
   Os testes não usam a conta ChatGPT real.
 - Verificação dirigida de áudio/Codex e Music Studio: **18 passaram, 1 pulado**.
+- Suíte musical final, com Blender habilitado: **19 passaram**, sem skips,
+  em 122,11 s. Após a proteção da importação multipart, seus dois testes dirigidos
+  de importação/mixagem e conflito também passaram.
 - TypeScript strict/typecheck, **7 testes Vitest**, build de produção Next.js.
 - **11 testes Playwright**, usando API FastAPI e frontend reais em 127.0.0.1:8001/3001,
   banco/output isolados e worker desabilitado nos testes de UI. Incluem editar/salvar
   plano musical, persistir volume, bloquear geração paga sem consentimento, mostrar
-  áudio ausente e cancelar operação enfileirada. Login, revisão e Colab existentes
+  áudio ausente, cancelar operação, importar um WAV real e processar a mixagem pela
+  fila até carregar o player final. A fixture é um tom, não evidência de canto.
+  Login, revisão e Colab existentes
   continuam cobertos. Os processos da instalação em uso não foram reiniciados.
 - Notebook validado com nbformat e todas as células Python compiladas. Isso não
   equivale a execução no runtime Colab.
@@ -43,7 +48,7 @@ checkpoint em shards, ZIP de retorno e importação até `HUMAN_REVIEW`. O teste
 também o áudio decodificado do MP4 com o WAV exportado (correlação acima de 0,95),
 para detectar uso de áudio antigo, nova trilha ou deslocamento indevido.
 
-Execução final observada:
+Execução CPU mais recente observada:
 
 | Parâmetro | Resultado |
 |---|---|
@@ -52,9 +57,9 @@ Execução final observada:
 | Motor/dispositivo | Cycles CPU, 1 thread, sem GPU |
 | Perfil diagnóstico | 64×96, 24 FPS, 8 samples |
 | Vídeo | 12 frames / 0,5 s, instrumental original, sem voz cantada |
-| Preparação | 7,075 s |
-| Lote de frames | 42,027 s, aproximadamente 3,50 s/frame |
-| Teste completo | 54,76 s |
+| Preparação | 12,924 s |
+| Lote de frames | 20,841 s, aproximadamente 1,74 s/frame |
+| Tempo no runner após preparação | 21,338 s |
 | Aprovação/publicação | Nenhuma; resultado aguardando revisão humana |
 
 Os números variaram nas repetições. Não extrapole esse teste minúsculo para HD ou
@@ -63,7 +68,7 @@ um episódio inteiro. Não foi medido pico de RAM/VRAM; não há medição de GP
 Artefatos locais de evidência, fora do Git:
 
 ```text
-output/music-evidence/0db9e867-ad2b-4ed2-a974-83a7c526c449/
+output/music-evidence/cdbe7464-4c4c-47e1-b3f4-4cd6db9c1ec9/
   input.zip
   result.zip
   result/video.mp4
@@ -73,7 +78,7 @@ output/music-evidence/0db9e867-ad2b-4ed2-a974-83a7c526c449/
 
 O campo genérico `origin: assisted-notebook` do relatório é produzido pelo runner
 portável; nesta verificação ele foi executado **localmente no Windows**, não no
-  Google Colab. Frames do início, meio e fim foram inspecionados, mas a resolução/duração não permitem
+Google Colab. Frames do início, meio e fim foram inspecionados, mas a resolução/duração não permitem
 declarar acabamento artístico, atuação ou coreografia de produção final.
 
 Para reproduzir, use os comandos em [MUSIC_STUDIO.md](MUSIC_STUDIO.md). Cada execução
