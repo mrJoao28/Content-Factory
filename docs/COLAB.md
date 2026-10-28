@@ -33,7 +33,7 @@ O pacote inclui apenas `manifest.json` e `audio/narration.wav` PCM16 medido. O m
 3. Opcional: crie a pasta `MyDrive/ContentFactory`. Na célula Drive, marque `MOUNT_DRIVE=True` e execute/autorize `drive.mount`. Padrão: `/content/drive/MyDrive/ContentFactory`. Não configure Google Cloud Console/client secret/conta de serviço. A integração Drive da aplicação Windows é independente dessa autorização padrão do notebook.
 4. Faça upload de **um ZIP** (até 256 MiB) ou escolha o arquivo no Drive autorizado. A validação compara commit/template, schema/catalog, áudio e caminhos antes do render. Confira o resumo da revisão/perfil.
 5. Configure threads, orçamento de disco, lote de frames e tempo finito. Qualidade/resolução/FPS/samples/seed vêm da exportação registrada. Para mudá-los, altere o perfil localmente e reexporte explicitamente: o importador rejeita divergências. A política GPU testa OptiX; se incompatível, informa e tenta CUDA. Se ambos falharem, interrompe; CPU exige nova exportação explícita. `nvidia-smi` não comprova uso por Blender.
-6. Execute **teste curto**: 12–24 frames reais da cena recebida. Veja imagens, dispositivo efetivo e segundos/frame. A estimativa varia conforme cena/setup e não garante aceleração. Nenhum render longo começa automaticamente.
+6. Execute **teste curto**: 12–24 frames reais da cena recebida. O probe GPU tem timeout de até 300 s por backend; CPU usa o limite finito configurado. Veja imagens, dispositivo efetivo e segundos/frame. A estimativa varia conforme cena/setup e não garante aceleração. Nenhum render longo começa automaticamente.
 7. Após inspecionar o teste, execute **Render completo**. O progresso é real por lote. Para cancelar, interrompa a célula: o subprocesso é encerrado; frames/checkpoints válidos permanecem. Não existe progresso remoto inventado no app Windows.
 8. Execute montagem/preview/download. Assista ao MP4 e baixe `<export_id>-result.zip`. Se Drive foi autorizado, também é feita uma cópia verificada do retorno.
 
@@ -54,6 +54,8 @@ Na produção original, em Review studio, use **Import result ZIP**. A API receb
 O retorno contém `result.json`, `video.mp4`, `thumbnail.png`, `report.json`; não contém scripts ou milhares de PNGs. FFprobe/FFmpeg locais conferem H.264/AAC, dimensões, duração, FPS, número de frames, decodificação completa e volume/áudio. O thumbnail utilizado é extraído novamente do vídeo validado. O relatório do notebook é proveniência declarada, não prova independente de que uma GPU foi usada. Não se confia nele para aprovar mídia.
 
 A importação publica os arquivos por rename atômico e registra um único artefato por exportação; repetir o mesmo retorno é idempotente. Arquivos/histórico anteriores permanecem. A aprovação atual é limpa ao importar um novo MP4. O projeto vai para **HUMAN_REVIEW**; assista e aprove explicitamente o hash atual. As exigências de publicação continuam iguais. Use **Return to local render** para retomar Blender local com os checkpoints preparados, sem nova inferência/áudio; é necessário Blender local configurado.
+
+Cancelar a produção na fábrica invalida o retorno pendente, mas não controla o runtime externo. Interrompa também a célula no Colab; não existe canal remoto entre o aplicativo e o notebook.
 
 CLI opcional, com a API local já iniciada:
 

@@ -5,8 +5,7 @@ Base inspecionada: `da3de24a6cf7726b12a2b05ea13ab83f3ea8ed20`, em 28/10/2026. De
 ## Verificado
 
 - `python -m pytest`: **223 passaram, 3 ignorados**. Os ignorados são renders Blender que exigem opt-in/configuração; o round-trip novo foi executado separadamente com Blender real.
-- Teste direcionado final: `tests/test_external_render.py` + `tests/test_colab_notebook.py`: **23 passaram**, incluindo o render CPU real e validação reforçada de frames/áudio na importação.
-- A cobertura adicional da preparação completa (provider textual controlado + narração importada real → espera externa) também passou. A rechecagem dirigida posterior teve **23 passando e 1 ignorado** por falta do opt-in Blender nessa execução; o render real já havia passado separadamente.
+- Teste direcionado final: `tests/test_external_render.py` + `tests/test_colab_notebook.py`: **24 passaram**, incluindo preparação completa (provider textual controlado + narração importada real → espera externa), render CPU real, checkpoint idempotente e validação reforçada de frames/áudio na importação.
 - Ruff: passou.
 - Frontend typecheck: passou; Vitest: **7 testes passaram**; build de produção Next: passou.
 - Playwright com API/Next reais em portas isoladas 8001/3001: **10 testes passaram**, incluindo preparação/exportação/importação/MP4/revisão e regressões OAuth/SSE/recuperação. Os testes não simulam as próprias rotas. Fixtures externas controladas são usadas somente nos testes.
@@ -17,7 +16,7 @@ Base inspecionada: `da3de24a6cf7726b12a2b05ea13ab83f3ea8ed20`, em 28/10/2026. De
 
 Fixture original sem dados pessoais: duas engrenagens procedurais no estúdio de engenharia, **0,5 s, 12 frames, 64×96, 24 FPS, Preview 8 samples, seed 0, uma thread**. Áudio conhecido de teste (tom), não narração real do usuário. Blender **5.2.3 LTS**, Cycles **CPU**, FFmpeg/FFprobe **9.0.2** em diretório de ferramentas isolado.
 
-No round-trip final medido: preparação **14,168 s**; lote real **37,341 s**, **3,112 s/frame**, zero frames reutilizados. Outras duas execuções mediram 22,698 s e 60,684 s para o lote; carga/setup variaram. Essas medições pequenas não estimam a velocidade de uma produção infantil 720p nem provam aceleração GPU. Memória/VRAM de pico não foi medida.
+No round-trip final medido: preparação **11,487 s**; lote real **37,907 s**, **3,159 s/frame**, zero frames reutilizados. Outras execuções mediram 22,698 s e 60,684 s para o lote; carga/setup variaram. Essas medições pequenas não estimam a velocidade de uma produção infantil 720p nem provam aceleração GPU. Memória/VRAM de pico não foi medida.
 
 O teste exportou por rota montada FastAPI, validou o pacote portátil, executou Blender e FFmpeg reais, salvou shard de checkpoint, montou o retorno e importou por HTTP até `HUMAN_REVIEW`. Uma segunda importação não criou artefato adicional. Aprovação permaneceu vazia. O thumbnail foi inspecionado visualmente; este clipe de diagnóstico não pretende demonstrar qualidade artística infantil.
 

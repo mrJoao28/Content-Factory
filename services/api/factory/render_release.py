@@ -1,2 +1,2 @@
 """Reviewed immutable render-only repository release."""
-RENDER_COMMIT = '2faf0bbdd37801b027ff0c697a5ba9c2c65add40'
+RENDER_COMMIT = 'fed2d65b275ef984cdd84c6fe09076aea53d4a70'
