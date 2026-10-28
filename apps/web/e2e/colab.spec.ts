@@ -1,0 +1,31 @@
+import { execFileSync } from "node:child_process";
+import path from "node:path";
+import { expect, test } from "@playwright/test";
+
+test("assisted export and imported return use real routes and require human review",async({page,request})=>{
+ const base="http://127.0.0.1:8001";
+ const headers={"X-Factory-Client":"local"};
+ const response=await request.post(`${base}/projects`,{headers,data:{idea:"An isolated engineering mechanism for assisted Colab rendering",channel_id:"how-it-works",target_duration:8,visual:{engine:"blender_3d",execution_location:"colab",external_hardware:"CPU"}}});
+ expect(response.ok()).toBeTruthy();const project=await response.json();
+ const root=path.resolve("../..");const python=process.env.FACTORY_TEST_PYTHON||path.join(root,".venv/Scripts/python.exe");
+ const seed=(mode:string)=>execFileSync(python,[path.join(root,"tests/seed_colab_browser.py"),mode,project.id],{cwd:root,env:process.env,windowsHide:true}).toString();
+ seed("prepare");
+ await page.addInitScript(id=>{localStorage.setItem("factory-project",id);localStorage.setItem("factory-channel","how-it-works");},project.id);
+ await page.goto("/preview");
+ await expect(page.getByRole("region",{name:"Assisted Colab render"})).toBeVisible();
+ await page.getByRole("button",{name:"Prepare for Colab",exact:true}).click();
+ await expect(page.getByText(/Waiting for external execution\/import/)).toBeVisible();
+ await page.getByRole("button",{name:"Export package",exact:true}).click();
+ await expect(page.getByRole("link",{name:"Download input ZIP"})).toBeVisible();
+ await expect(page.getByRole("link",{name:"Open notebook in Colab"})).toHaveAttribute("href",/colab\.research\.google\.com/);
+ expect((await request.post(`${base}/projects/${project.id}/jobs/resume`,{headers,data:{}})).status()).toBe(409);
+ const prepared=JSON.parse(seed("result"));
+ await page.getByLabel("Import Colab result").setInputFiles(prepared.file);
+ await expect(page.getByText("Imported and technically validated; human review required",{exact:true})).toBeVisible();
+ await expect(page.locator("video")).toBeVisible();
+ const detail=await(await request.get(`${base}/projects/${project.id}`)).json();
+ expect(detail.status).toBe("HUMAN_REVIEW");expect(detail.approved_hash).toBeNull();expect(detail.artifacts).toHaveLength(1);
+ expect(detail.jobs[0].checkpoint.creative_director.summary).toBe("Preserved fixture");
+ await page.screenshot({path:"../../output/colab-browser-review.png",fullPage:true});
+ seed("cleanup");
+});

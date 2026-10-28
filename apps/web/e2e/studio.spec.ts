@@ -24,6 +24,8 @@ test("visual regeneration goes through real API and invalidates only the selecte
  const detail=await(await request.get(`http://127.0.0.1:8001/projects/${project.id}`)).json();
  expect(detail.revision).toBe(2);expect(detail.approved_hash).toBeNull();expect(detail.jobs).toHaveLength(2);
  expect(detail.jobs.filter((j:{revision:number})=>j.revision===1)[0].state).toBe("CANCELLED");
+ const root=path.resolve(process.cwd(),"../..");
+ execFileSync(process.env.FACTORY_TEST_PYTHON||path.join(root,".venv/Scripts/python.exe"),[path.join(root,"tests/seed_colab_browser.py"),"cleanup",project.id],{cwd:root,env:process.env,windowsHide:true});
 });
 test("real dashboard, project creation, queue and independent channels",async({page})=>{
  await page.goto("/");
@@ -109,7 +111,7 @@ test("failed production switches explicitly to ChatGPT and resumes through real 
  const created=await request.post(base+"/projects",{headers,data:{idea:"Recover a failed browser production with its existing checkpoints",channel_id:"wondernest"}});
  expect(created.status()).toBe(201);const project=await created.json();
  const root=path.resolve(process.cwd(),"../..");
- execFileSync(path.join(root,".venv/Scripts/python.exe"),[path.join(root,"tests/seed_browser_recovery.py"),project.id],{cwd:root,env:process.env,windowsHide:true});
+ execFileSync(process.env.FACTORY_TEST_PYTHON||path.join(root,".venv/Scripts/python.exe"),[path.join(root,"tests/seed_browser_recovery.py"),project.id],{cwd:root,env:process.env,windowsHide:true});
  await request.patch(base+"/settings",{headers,data:{ai_provider:"chatgpt"}});
  await page.goto("/preview");
  await page.evaluate(id=>{localStorage.setItem("factory-project",id);localStorage.setItem("factory-channel","wondernest");},project.id);
@@ -139,7 +141,7 @@ test("review shows safe transport format diagnostic without replacing selection 
  const created=await request.post(base+"/projects",{headers,data:{idea:"A production stopped by an unexpected response format",channel_id:"wondernest"}});
  expect(created.status()).toBe(201);const project=await created.json();
  const root=path.resolve(process.cwd(),"../..");
- execFileSync(path.join(root,".venv/Scripts/python.exe"),[path.join(root,"tests/seed_browser_recovery.py"),project.id,"--response-format"],{cwd:root,env:process.env,windowsHide:true});
+ execFileSync(process.env.FACTORY_TEST_PYTHON||path.join(root,".venv/Scripts/python.exe"),[path.join(root,"tests/seed_browser_recovery.py"),project.id,"--response-format"],{cwd:root,env:process.env,windowsHide:true});
  await page.goto("/preview");
  await page.evaluate(id=>{localStorage.setItem("factory-project",id);localStorage.setItem("factory-channel","wondernest");},project.id);
  await page.reload();

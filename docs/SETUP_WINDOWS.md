@@ -52,3 +52,6 @@ O setup precisa baixar pacotes se nao estiverem instalados. `WinError 10013` ind
 Setup checks the native SWC module for a lock before installing dependencies. Dev checks both ports and the installed Next entrypoint before starting anything, starts Next directly through Node, waits for successful HTTP responses, and displays startup logs on failure. Cleanup errors do not replace the startup error. The READY message is displayed only after API and frontend answer successfully.
 
 Para o login recomendado sem CLI/SDK, siga [CHATGPT_DIRECT.md](CHATGPT_DIRECT.md). O setup padrao nao instala Codex e o doctor nao executa seu CLI quando ChatGPT direto esta selecionado.
+# Alternativa assistida de render
+
+[Google Colab assistido](COLAB.md) permite preparar storyboard/áudio no Windows, renderizar no notebook hospedado e importar o MP4 para revisão. Não exige novas credenciais nem Blender local para preparação/exportação; exige FFmpeg/FFprobe localmente para áudio e validação do retorno. Ative somente após concluir ou pausar explicitamente o render em andamento.

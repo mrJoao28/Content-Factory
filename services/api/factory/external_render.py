@@ -62,6 +62,8 @@ def location(project_id, revision, target, hardware):
         if visual.engine != 'blender_3d':
             raise ValueError('Choose Blender 3D before selecting Colab execution')
         job = current_job(db, project)
+        if job and job.owner and job.state not in {'PAUSED', 'CANCELLED', 'WAITING_FOR_EXTERNAL_RENDER'}:
+            raise HTTPException(409, 'Pause the active production explicitly and wait for its render lease to release before transferring it')
         if job and job.state in {'SCHEDULED', 'PUBLISHED', 'DRIVE_UPLOAD', 'PUBLICATION_PREPARATION'}:
             raise HTTPException(409, 'Stop publication work before changing render execution')
         # A different hardware choice creates a new registered export; previous IDs are invalidated.

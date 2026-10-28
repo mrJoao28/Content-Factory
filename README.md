@@ -78,3 +78,6 @@ Em Settings selecione ChatGPT plan - direct connection, clique Continue with Cha
 Esse fluxo nao exige Codex CLI/SDK, OPENAI_API_KEY ou client secret. Instalacoes novas usam AI_PROVIDER=chatgpt; instalacoes anteriores preservam Codex ate uma escolha explicita. O provider Codex continua disponivel e seu SDK pode ser instalado com scripts/setup.ps1 -InstallCodexSdk.
 
 Guia completo, seguranca, reconexao e limitacoes: [docs/CHATGPT_DIRECT.md](docs/CHATGPT_DIRECT.md). Esse login gera texto estruturado; os videos continuam produzidos pelo compositor local 2.5D.
+# Render assistido no Colab
+
+Preparação local → ZIP portável → notebook hospedado → checkpoints opcionais no Drive → MP4 → importação para revisão humana. Não requer credenciais no notebook nem publica automaticamente. [Guia em português](docs/COLAB.md) · [Notebook](notebooks/content_factory_colab.ipynb).

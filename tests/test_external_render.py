@@ -30,7 +30,8 @@ def ready(client, monkeypatch):
     monkeypatch.setattr('factory.visual_render.blender_info', lambda: pytest.fail('External preparation called local Blender'))
     response = client.post('/projects', json={'idea': 'Show two original gears turning in a 3D engineering studio',
         'channel_id': 'how-it-works', 'target_duration': 8,
-        'visual': {'engine': 'blender_3d', 'execution_location': 'colab', 'external_hardware': 'CPU'}})
+        'visual': {'engine': 'blender_3d', 'execution_location': 'colab', 'external_hardware': 'CPU',
+                   'environment': 'engineering_studio'}})
     assert response.status_code == 201, response.text
     project_id = response.json()['id']
     audio = settings.output_dir/'known.wav'
@@ -226,6 +227,41 @@ def test_worker_external_boundary_retains_checkpoints_and_releases_lease(client,
         assert job.checkpoint['creative_director'] == {'retained': True}
         assert job.checkpoint['script_writer']['title'] == 'Gears'
     assert claim('second-worker') is None
+
+
+def test_preparation_reaches_external_boundary_without_local_blender(client, ready, monkeypatch):
+    """Real pipeline/worker/routes, controlled text provider and real imported measured audio."""
+    import shutil
+    from contextlib import nullcontext
+
+    from factory.queue import Worker
+    from factory.schemas import AgentResult
+
+    class TextBoundary:
+        def generate(self, role, context, response_type, **kwargs):
+            assert response_type is AgentResult
+            return AgentResult(summary='Controlled text-provider fixture', flags=[])
+
+        def persistence_guard(self):
+            return nullcontext()
+
+    monkeypatch.setattr('factory.pipeline.get_provider', lambda *_: TextBoundary())
+    shutil.copyfile(settings.output_dir/'known.wav', settings.storage_root/'imported.wav')
+    with Session.begin() as db:
+        project = db.get(VideoProject, ready)
+        project.narration = {'path': 'imported.wav'}
+        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == ready))
+        job.state = 'DRAFT'
+        job.checkpoint = {**job.checkpoint, 'creative_director': {'summary': 'Preserved concept'}}
+    assert Worker().once()
+    with Session() as db:
+        job = db.scalar(select(ProductionJob).where(ProductionJob.project_id == ready))
+        assert job.state == 'WAITING_FOR_EXTERNAL_RENDER', job.error
+        assert job.checkpoint['_render_prepared'] is True
+        assert job.owner is None and job.lease_until is None
+        assert job.checkpoint['script_writer']['title'] == 'Gears'
+    package, _ = export(client, ready)
+    assert package.board.duration == .5
 
 
 def test_cancel_terminates_renderer_subprocess():
